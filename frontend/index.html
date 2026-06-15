@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Property Risk Explorer — FEMA NRI</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1923;
+      --bg-card:   #1a2332;
+      --bg-hover:  #1f2d40;
+      --border:    #2d3f55;
+      --text:      #e8eaed;
+      --muted:     #7a93b0;
+      --accent:    #3b82f6;
+
+      --vhigh:     #dc2626;
+      --high:      #ea580c;
+      --mod:       #ca8a04;
+      --low:       #16a34a;
+      --vlow:      #2563eb;
+      --na:        #4b5563;
+    }
+
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────────── */
+    #header {
+      height: 58px;
+      flex-shrink: 0;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 18px;
+      z-index: 1000;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .brand-icon { font-size: 1.2rem; }
+
+    .search-wrap {
+      flex: 1;
+      max-width: 600px;
+      display: flex;
+      gap: 8px;
+    }
+
+    #addr-input {
+      flex: 1;
+      padding: 8px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #addr-input:focus { border-color: var(--accent); }
+    #addr-input::placeholder { color: var(--muted); }
+
+    #search-btn {
+      padding: 8px 20px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    #search-btn:hover { opacity: 0.88; }
+    #search-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Body layout ─────────────────────────────────────────────────────────── */
+    #body {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Map ─────────────────────────────────────────────────────────────────── */
+    #map-wrap {
+      flex: 1;
+      position: relative;
+      min-width: 0;
+    }
+    #map { width: 100%; height: 100%; }
+
+    #map-spinner {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 25, 35, 0.65);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #map-spinner p { font-size: 0.85rem; color: var(--muted); }
+
+    .spin {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Dashboard sidebar ───────────────────────────────────────────────────── */
+    #dash {
+      width: 380px;
+      flex-shrink: 0;
+      background: var(--bg-card);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Shared panel styles */
+    .panel { display: flex; flex-direction: column; flex: 1; overflow-y: auto; }
+    .panel.hidden { display: none; }
+
+    /* ── Empty state ─────────────────────────────────────────────────────────── */
+    #p-empty {
+      align-items: center;
+      justify-content: center;
+      padding: 36px 28px;
+      text-align: center;
+      gap: 14px;
+      color: var(--muted);
+    }
+    #p-empty .empty-icon { font-size: 2.8rem; opacity: 0.5; }
+    #p-empty h2 { font-size: 1rem; color: var(--text); font-weight: 600; }
+    #p-empty p { font-size: 0.82rem; line-height: 1.65; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 6px; }
+    .pill {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    /* ── Error state ─────────────────────────────────────────────────────────── */
+    #p-error {
+      padding: 28px 24px;
+      gap: 10px;
+    }
+    #p-error .err-icon { font-size: 1.8rem; }
+    #p-error .err-title { font-weight: 700; font-size: 0.95rem; color: #f87171; }
+    #p-error .err-msg { font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
+    #p-error .err-hint { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+
+    /* ── Results panel ───────────────────────────────────────────────────────── */
+    #p-results { gap: 0; }
+
+    .ds { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .ds-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    /* Property */
+    .prop-addr { font-size: 0.88rem; font-weight: 600; line-height: 1.4; margin-bottom: 4px; }
+    .prop-meta { font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
+
+    /* Composite score card */
+    .score-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 14px;
+    }
+
+    .gauge-wrap {
+      position: relative;
+      width: 76px; height: 76px;
+      flex-shrink: 0;
+    }
+    .gauge-wrap svg { transform: rotate(-90deg); }
+    .gauge-bg { stroke: var(--border); }
+    .gauge-fill { transition: stroke-dasharray 0.7s ease; }
+    .gauge-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .gauge-num { font-size: 1.3rem; font-weight: 800; line-height: 1; }
+    .gauge-denom { font-size: 0.6rem; color: var(--muted); }
+
+    .score-info { flex: 1; min-width: 0; }
+    .rating-badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .score-info .detail { font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
+
+    /* Insight block */
+    .insight {
+      font-size: 0.82rem;
+      line-height: 1.65;
+      padding: 10px 13px;
+      background: var(--bg);
+      border-radius: 8px;
+      border-left: 3px solid var(--accent);
+    }
+
+    /* Top hazard cards */
+    .hz-cards { display: flex; flex-direction: column; gap: 8px; }
+    .hz-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 13px;
+      border-left-width: 3px;
+    }
+    .hz-card-icon { font-size: 1.2rem; width: 26px; text-align: center; flex-shrink: 0; }
+    .hz-card-info { flex: 1; min-width: 0; }
+    .hz-card-name { font-size: 0.83rem; font-weight: 600; }
+    .hz-card-rating { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+    .hz-card-score { font-size: 0.88rem; font-weight: 700; flex-shrink: 0; }
+
+    /* All-hazards toggle */
+    #all-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      transition: background 0.12s;
+      user-select: none;
+    }
+    #all-toggle:hover { background: var(--bg-hover); }
+    .chevron { transition: transform 0.2s; display: inline-block; }
+    .chevron.open { transform: rotate(180deg); }
+
+    /* Hazard table rows */
+    #all-table { display: none; }
+    .ht-row {
+      display: grid;
+      grid-template-columns: 22px 1fr 54px 92px;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.78rem;
+      transition: background 0.1s;
+    }
+    .ht-row:hover { background: var(--bg-hover); }
+    .ht-row.na { opacity: 0.38; }
+    .ht-icon { text-align: center; font-size: 0.85rem; }
+    .ht-name { color: var(--text); }
+    .ht-score { font-weight: 700; text-align: right; }
+    .ht-badge {
+      padding: 1px 7px;
+      border-radius: 20px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    /* Attribution */
+    .attrib { font-size: 0.7rem; color: var(--muted); line-height: 1.7; }
+    .attrib a { color: var(--accent); text-decoration: none; }
+    .attrib a:hover { text-decoration: underline; }
+
+    /* Rating color utilities */
+    .c-vhigh  { color: var(--vhigh); } .bg-vhigh  { background: #450a0a; color: #fca5a5; }
+    .c-high   { color: var(--high);  } .bg-high   { background: #431407; color: #fdba74; }
+    .c-mod    { color: var(--mod);   } .bg-mod    { background: #422006; color: #fde68a; }
+    .c-low    { color: var(--low);   } .bg-low    { background: #052e16; color: #86efac; }
+    .c-vlow   { color: var(--vlow);  } .bg-vlow   { background: #172554; color: #93c5fd; }
+    .c-na     { color: var(--na);    } .bg-na     { background: #1f2937; color: #9ca3af; }
+
+    /* Leaflet overrides */
+    .leaflet-control-attribution {
+      background: rgba(15, 25, 35, 0.8) !important;
+      color: var(--muted) !important;
+    }
+    .leaflet-control-attribution a { color: var(--accent) !important; }
+    .leaflet-popup-content-wrapper {
+      background: var(--bg-card) !important;
+      color: var(--text) !important;
+      border-radius: 8px !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+    }
+    .leaflet-popup-tip { background: var(--bg-card) !important; }
+    .leaflet-popup-content { font-size: 0.82rem; margin: 10px 14px !important; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<header id="header">
+  <div class="brand">
+    <span class="brand-icon">🏠</span>
+    Property Risk Explorer
+  </div>
+  <div class="search-wrap">
+    <input id="addr-input" type="text"
+           placeholder="Enter US property address (e.g., 1600 Pennsylvania Ave NW, Washington DC)"
+           autocomplete="off">
+    <button id="search-btn">Search</button>
+  </div>
+</header>
+
+<!-- ── Body ────────────────────────────────────────────────────────────────── -->
+<div id="body">
+
+  <!-- Map panel -->
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="map-spinner">
+      <div class="spin"></div>
+      <p>Locating property...</p>
+    </div>
+  </div>
+
+  <!-- Dashboard sidebar -->
+  <aside id="dash">
+
+    <!-- Empty state -->
+    <div id="p-empty" class="panel" style="display:flex">
+      <div class="empty-icon">🗺️</div>
+      <h2>Property Risk Explorer</h2>
+      <p>Enter any US street address to view the FEMA National Risk Index assessment for that location.</p>
+      <div class="pill-row">
+        <span class="pill">Satellite imagery</span>
+        <span class="pill">Property outline</span>
+        <span class="pill">18 hazard types</span>
+        <span class="pill">Risk insights</span>
+      </div>
+    </div>
+
+    <!-- Error state -->
+    <div id="p-error" class="panel hidden">
+      <span class="err-icon">⚠️</span>
+      <div class="err-title" id="err-title"></div>
+      <div class="err-msg" id="err-msg"></div>
+      <div class="err-hint" id="err-hint"></div>
+    </div>
+
+    <!-- Results panel -->
+    <div id="p-results" class="panel hidden">
+
+      <!-- Property -->
+      <div class="ds" id="ds-property">
+        <div class="ds-label">Property</div>
+        <div class="prop-addr" id="r-addr"></div>
+        <div class="prop-meta" id="r-meta"></div>
+      </div>
+
+      <!-- Composite NRI score -->
+      <div class="ds" id="ds-score">
+        <div class="ds-label">FEMA National Risk Index</div>
+        <div id="score-unavail" class="hidden" style="font-size:0.8rem;color:var(--muted);line-height:1.6">
+          NRI data is not available for this census tract.
+          <a href="https://hazards.fema.gov/nri/map" target="_blank" rel="noopener"
+             style="color:var(--accent)">View on FEMA's map →</a>
+        </div>
+        <div id="score-card" class="score-card">
+          <div class="gauge-wrap">
+            <svg width="76" height="76" viewBox="0 0 76 76">
+              <circle class="gauge-bg" cx="38" cy="38" r="30" fill="none" stroke-width="6"/>
+              <circle id="gauge-fill" class="gauge-fill" cx="38" cy="38" r="30" fill="none"
+                      stroke-width="6" stroke-linecap="round"
+                      stroke-dasharray="0 188.5" transform="rotate(-90 38 38)"/>
+            </svg>
+            <div class="gauge-center">
+              <span class="gauge-num" id="gauge-num">—</span>
+              <span class="gauge-denom">/100</span>
+            </div>
+          </div>
+          <div class="score-info">
+            <div id="rating-badge" class="rating-badge bg-na">No Rating</div>
+            <div class="detail">Composite NRI Risk Score</div>
+            <div class="detail" id="pctl-note"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Insight -->
+      <div class="ds" id="ds-insight" class="hidden">
+        <div class="ds-label">Risk Assessment</div>
+        <div class="insight" id="r-insight"></div>
+      </div>
+
+      <!-- Key risk factors (top 3) -->
+      <div class="ds" id="ds-top">
+        <div class="ds-label">Key Risk Factors</div>
+        <div class="hz-cards" id="r-top-cards"></div>
+      </div>
+
+      <!-- All 18 hazards (expandable) -->
+      <div id="ds-all">
+        <div id="all-toggle">
+          <span>All 18 Hazard Types</span>
+          <span class="chevron" id="chevron">▼</span>
+        </div>
+        <div id="all-table"></div>
+      </div>
+
+      <!-- Attribution -->
+      <div class="ds">
+        <div class="ds-label">Data Sources</div>
+        <div class="attrib">
+          Risk scores: <a href="https://hazards.fema.gov/nri/" target="_blank" rel="noopener">FEMA National Risk Index</a><br>
+          Geocoding &amp; boundaries: <a href="https://www.census.gov/" target="_blank" rel="noopener">US Census Bureau</a><br>
+          Building footprints: <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap contributors</a><br>
+          Satellite imagery: <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri World Imagery</a>
+        </div>
+      </div>
+
+    </div><!-- /p-results -->
+  </aside>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+'use strict';
+
+// ── Hazard catalogue ──────────────────────────────────────────────────────────
+const HAZARDS = [
+  { code: 'AVLN', name: 'Avalanche',          icon: '🏔️' },
+  { code: 'CFLD', name: 'Coastal Flooding',   icon: '🌊' },
+  { code: 'CWAV', name: 'Cold Wave',           icon: '🥶' },
+  { code: 'DRGT', name: 'Drought',             icon: '☀️' },
+  { code: 'ERQK', name: 'Earthquake',          icon: '🌍' },
+  { code: 'HAIL', name: 'Hail',                icon: '🌨️' },
+  { code: 'HWAV', name: 'Heat Wave',           icon: '🌡️' },
+  { code: 'HRCN', name: 'Hurricane',           icon: '🌀' },
+  { code: 'ISTM', name: 'Ice Storm',           icon: '🧊' },
+  { code: 'LNDS', name: 'Landslide',           icon: '⛰️' },
+  { code: 'LTNG', name: 'Lightning',           icon: '⚡' },
+  { code: 'RFLD', name: 'Riverine Flooding',   icon: '🏞️' },
+  { code: 'SWND', name: 'Strong Wind',         icon: '💨' },
+  { code: 'TRND', name: 'Tornado',             icon: '🌪️' },
+  { code: 'TSUN', name: 'Tsunami',             icon: '🏄' },
+  { code: 'VLCN', name: 'Volcanic Activity',   icon: '🌋' },
+  { code: 'WFIR', name: 'Wildfire',            icon: '🔥' },
+  { code: 'WNTW', name: 'Winter Weather',      icon: '❄️' },
+];
+
+const HAZARD_DESC = {
+  AVLN: 'Snow or ice masses sliding rapidly down steep terrain, threatening structures below.',
+  CFLD: 'Seawater inundating low-lying coastal land during storms or high tides.',
+  CWAV: 'Extended periods of abnormally cold temperatures that strain heating systems and infrastructure.',
+  DRGT: 'Prolonged water deficits that damage foundations, increase wildfire risk, and stress crops.',
+  ERQK: 'Ground shaking from seismic events that can damage or collapse structures.',
+  HAIL: 'Balls of ice from thunderstorms causing roof, window, and vehicle damage.',
+  HWAV: 'Extended periods of extreme heat that damage materials and create health emergencies.',
+  HRCN: 'Tropical cyclones bringing storm surge, destructive winds, and extreme rainfall.',
+  ISTM: 'Freezing rain that coats surfaces with ice, collapsing roofs and snapping power lines.',
+  LNDS: 'Rapid downslope movement of soil and rock that can instantly destroy structures.',
+  LTNG: 'Electrical discharge that can ignite fires, damage electronics, and cause structural harm.',
+  RFLD: 'Overflowing rivers and streams that inundate surrounding land and structures.',
+  SWND: 'Straight-line winds from thunderstorms or derechos causing widespread structural damage.',
+  TRND: 'Violently rotating columns of air capable of catastrophic property destruction.',
+  TSUN: 'Large ocean waves triggered by earthquakes or landslides that devastate coastlines.',
+  VLCN: 'Lava flows, ash fall, and pyroclastic hazards from active volcanoes.',
+  WFIR: 'Uncontrolled fire burning across vegetation that threatens structures and air quality.',
+  WNTW: 'Snow, blizzards, and freezing conditions that isolate and damage properties.',
+};
+
+// ── Risk rating helpers ───────────────────────────────────────────────────────
+const RATINGS = {
+  'Very High':            { cls: 'vhigh', bg: 'bg-vhigh', label: 'Very High' },
+  'Relatively High':      { cls: 'high',  bg: 'bg-high',  label: 'Relatively High' },
+  'Relatively Moderate':  { cls: 'mod',   bg: 'bg-mod',   label: 'Relatively Moderate' },
+  'Relatively Low':       { cls: 'low',   bg: 'bg-low',   label: 'Relatively Low' },
+  'Very Low':             { cls: 'vlow',  bg: 'bg-vlow',  label: 'Very Low' },
+  'Not Applicable':       { cls: 'na',    bg: 'bg-na',    label: 'N/A' },
+  'No Rating':            { cls: 'na',    bg: 'bg-na',    label: 'No Rating' },
+};
+
+function rating(str) {
+  return RATINGS[str] || RATINGS['No Rating'];
+}
+
+function scoreColor(score) {
+  if (score == null) return 'var(--na)';
+  if (score >= 80) return 'var(--vhigh)';
+  if (score >= 60) return 'var(--high)';
+  if (score >= 40) return 'var(--mod)';
+  if (score >= 20) return 'var(--low)';
+  return 'var(--vlow)';
+}
+
+function scoreRating(score) {
+  if (score == null) return 'No Rating';
+  if (score >= 80) return 'Very High';
+  if (score >= 60) return 'Relatively High';
+  if (score >= 40) return 'Relatively Moderate';
+  if (score >= 20) return 'Relatively Low';
+  return 'Very Low';
+}
+
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Map setup ─────────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true }).setView([39.5, -98.35], 4);
+
+L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {
+    attribution: 'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Source: Esri, Maxar, GeoEye, USDA, USGS, AeroGRID',
+    maxZoom: 19,
+  }
+).addTo(map);
+
+let tractLayer = null, buildingLayer = null, markerLayer = null;
+
+function clearMapLayers() {
+  [tractLayer, buildingLayer, markerLayer].forEach(l => l && map.removeLayer(l));
+  tractLayer = buildingLayer = markerLayer = null;
+}
+
+// ── API: Census Geocoder ──────────────────────────────────────────────────────
+async function geocode(address) {
+  const p = new URLSearchParams({
+    address,
+    benchmark: 'Public_AR_Current',
+    vintage: 'Current_Current',
+    layers: 'Census Tracts',
+    format: 'json',
+  });
+  const res = await fetch(`/api/census/geocoder/geographies/onelineaddress?${p}`);
+  if (!res.ok) throw new Error(`Geocoder returned HTTP ${res.status}`);
+  const data = await res.json();
+
+  const matches = data?.result?.addressMatches;
+  if (!matches?.length) return null;
+
+  const m = matches[0];
+  const tract = m.geographies?.['Census Tracts']?.[0];
+
+  return {
+    lat: m.coordinates.y,
+    lng: m.coordinates.x,
+    matchedAddress: m.matchedAddress,
+    tractFips: tract?.GEOID ?? null,                      // 11-digit
+    countyFips: tract ? tract.STATE + tract.COUNTY : null, // 5-digit
+  };
+}
+
+// ── API: Census TIGER tract boundary ─────────────────────────────────────────
+async function fetchTractBoundary(tractFips) {
+  const p = new URLSearchParams({
+    where: `GEOID='${tractFips}'`,
+    outFields: 'GEOID',
+    outSR: '4326',
+    f: 'geojson',
+  });
+  try {
+    const res = await fetch(
+      `/api/tiger/arcgis/rest/services/TIGERweb/tigerWMS_ACS2023/MapServer/8/query?${p}`
+    );
+    if (!res.ok) return null;
+    const gj = await res.json();
+    return gj?.features?.[0] ?? null;
+  } catch { return null; }
+}
+
+// ── API: FEMA NRI ─────────────────────────────────────────────────────────────
+async function fetchNRI(tractFips, countyFips) {
+  // Try multiple known NRI endpoint patterns in order
+  const endpoints = [
+    tractFips  ? `/api/nri/api/historicRecordForTract?tractFips=${tractFips}` : null,
+    tractFips  ? `/api/nri/api/tracts/${tractFips}` : null,
+    countyFips ? `/api/nri/api/counties/${countyFips}` : null,
+  ].filter(Boolean);
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const raw = await res.json();
+      const d = Array.isArray(raw) ? raw[0] : (raw?.data ?? raw);
+      if (d && (d.RISK_SCORE != null || d.RISK_RATNG)) {
+        console.info('[NRI] loaded from', url);
+        return d;
+      }
+    } catch (e) {
+      console.warn('[NRI] endpoint failed:', url, e.message);
+    }
+  }
+  console.warn('[NRI] all endpoints failed — no NRI data');
+  return null;
+}
+
+// ── API: OSM Overpass building ────────────────────────────────────────────────
+async function fetchBuilding(lat, lng) {
+  const q = `[out:json][timeout:15];(way["building"](around:60,${lat},${lng}););out geom;`;
+  try {
+    const res = await fetch('/api/overpass/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(q)}`,
+    });
+    if (!res.ok) return null;
+    const osm = await res.json();
+    return osmBestBuilding(osm.elements || [], lat, lng);
+  } catch { return null; }
+}
+
+function osmBestBuilding(elements, lat, lng) {
+  // Pick the way with valid geometry whose centroid is closest to target
+  let best = null, bestDist = Infinity;
+  for (const el of elements) {
+    if (el.type !== 'way' || !el.geometry?.length) continue;
+    const coords = el.geometry.map(n => [n.lon, n.lat]);
+    if (coords.length < 3) continue;
+    const cLng = coords.reduce((s, c) => s + c[0], 0) / coords.length;
+    const cLat = coords.reduce((s, c) => s + c[1], 0) / coords.length;
+    const dist = Math.hypot(cLng - lng, cLat - lat);
+    if (dist < bestDist) { bestDist = dist; best = coords; }
+  }
+  if (!best) return null;
+  if (best[0][0] !== best[best.length - 1][0]) best.push(best[0]);
+  return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [best] }, properties: {} };
+}
+
+// ── Map rendering ─────────────────────────────────────────────────────────────
+function renderMap(lat, lng, tractFeature, buildingFeature, nriData) {
+  clearMapLayers();
+
+  const compRating = nriData?.RISK_RATNG || scoreRating(nriData?.RISK_SCORE);
+  const color = scoreColor(nriData?.RISK_SCORE);
+
+  if (tractFeature) {
+    tractLayer = L.geoJSON(tractFeature, {
+      style: { color, weight: 2, fillColor: color, fillOpacity: 0.28, opacity: 0.85 }
+    }).addTo(map);
+  }
+
+  if (buildingFeature) {
+    buildingLayer = L.geoJSON(buildingFeature, {
+      style: { color: '#f97316', weight: 2.5, fillColor: '#f97316', fillOpacity: 0.45, opacity: 1 }
+    }).addTo(map);
+  }
+
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="width:12px;height:12px;background:#fff;border:2.5px solid ${color};border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,0.25),0 2px 8px rgba(0,0,0,0.5)"></div>`,
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+  });
+  markerLayer = L.marker([lat, lng], { icon }).addTo(map);
+
+  if (tractLayer) {
+    map.fitBounds(tractLayer.getBounds(), { padding: [40, 40], maxZoom: 15 });
+  } else {
+    map.flyTo([lat, lng], 15, { duration: 1.2 });
+  }
+}
+
+// ── Dashboard rendering ───────────────────────────────────────────────────────
+function renderDashboard(matchedAddress, geo, nriData) {
+  // Property section
+  document.getElementById('r-addr').textContent = matchedAddress || geo.matchedAddress;
+  const meta = [geo.tractFips ? `Census Tract ${geo.tractFips}` : null].filter(Boolean).join(' · ');
+  document.getElementById('r-meta').textContent = meta;
+
+  // Composite score
+  const score = nriData?.RISK_SCORE ?? null;
+  const ratingStr = nriData?.RISK_RATNG || (score != null ? scoreRating(score) : null);
+  const pctl = nriData?.RISK_NPCTL ?? null;
+
+  if (!nriData || (score == null && !ratingStr)) {
+    document.getElementById('score-card').classList.add('hidden');
+    document.getElementById('score-unavail').classList.remove('hidden');
+  } else {
+    document.getElementById('score-unavail').classList.add('hidden');
+    document.getElementById('score-card').classList.remove('hidden');
+
+    const r30 = 30, circ = 2 * Math.PI * r30;
+    const filled = score != null ? (Math.min(score, 100) / 100) * circ : 0;
+    const color = scoreColor(score);
+
+    document.getElementById('gauge-fill').setAttribute('stroke', color);
+    document.getElementById('gauge-fill').setAttribute('stroke-dasharray', `${filled} ${circ - filled}`);
+    document.getElementById('gauge-num').textContent = score != null ? score.toFixed(1) : '—';
+    document.getElementById('gauge-num').style.color = color;
+
+    const badge = document.getElementById('rating-badge');
+    badge.textContent = ratingStr || 'No Rating';
+    badge.className = 'rating-badge ' + (rating(ratingStr)?.bg || 'bg-na');
+
+    document.getElementById('pctl-note').textContent =
+      pctl != null ? `Higher than ${pctl.toFixed(0)}% of US census tracts` : '';
+  }
+
+  // Hazard scores
+  const hazards = HAZARDS.map(h => {
+    const s = nriData?.[`${h.code}_RISKS`] ?? null;
+    const r = nriData?.[`${h.code}_RISKR`] ?? (s != null ? scoreRating(s) : 'Not Applicable');
+    return { ...h, score: s, ratingStr: r };
+  }).sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+
+  const applicable = hazards.filter(
+    h => h.ratingStr !== 'Not Applicable' && h.score != null
+  );
+  const top3 = applicable.slice(0, 3);
+
+  // Insight
+  const dsInsight = document.getElementById('ds-insight');
+  if (top3.length > 0 && nriData) {
+    const parts = top3.slice(0, 2).map(h => `<strong>${h.name}</strong> (${rating(h.ratingStr).label})`);
+    const text = `This property is in a <strong>${ratingStr || 'unrated'}</strong> composite risk area, with ${parts.join(' and ')} as the primary concerns.`;
+    document.getElementById('r-insight').innerHTML = text;
+    dsInsight.style.display = '';
+  } else {
+    dsInsight.style.display = 'none';
+  }
+
+  // Top 3 cards
+  const topContainer = document.getElementById('r-top-cards');
+  if (top3.length === 0) {
+    topContainer.innerHTML = '<p style="font-size:0.8rem;color:var(--muted)">No significant hazards identified for this location.</p>';
+  } else {
+    topContainer.innerHTML = top3.map(h => {
+      const r = rating(h.ratingStr);
+      const c = scoreColor(h.score);
+      return `
+        <div class="hz-card" style="border-left-color:${c}">
+          <span class="hz-card-icon">${h.icon}</span>
+          <div class="hz-card-info">
+            <div class="hz-card-name">${esc(h.name)}</div>
+            <div class="hz-card-rating">${esc(r.label)}</div>
+          </div>
+          <span class="hz-card-score" style="color:${c}">${h.score != null ? h.score.toFixed(1) : '—'}</span>
+        </div>`;
+    }).join('');
+  }
+
+  // All-hazards table
+  document.getElementById('all-table').innerHTML = hazards.map(h => {
+    const r = rating(h.ratingStr);
+    const isNA = r.cls === 'na';
+    const c = scoreColor(h.score);
+    return `
+      <div class="ht-row${isNA ? ' na' : ''}">
+        <span class="ht-icon">${h.icon}</span>
+        <span class="ht-name">${esc(h.name)}</span>
+        <span class="ht-score" style="color:${isNA ? 'var(--na)' : c}">${h.score != null ? h.score.toFixed(1) : '—'}</span>
+        <span class="ht-badge ${r.bg}">${r.label}</span>
+      </div>`;
+  }).join('');
+}
+
+// ── UI state helpers ──────────────────────────────────────────────────────────
+function showPanel(id) {
+  ['p-empty','p-error','p-results'].forEach(pid => {
+    const el = document.getElementById(pid);
+    el.classList.toggle('hidden', pid !== id);
+    if (pid !== 'p-empty') el.style.display = pid === id ? 'flex' : 'none';
+  });
+  if (id === 'p-empty') {
+    document.getElementById('p-empty').style.display = 'flex';
+  }
+}
+
+function setSearching(on) {
+  document.getElementById('map-spinner').style.display = on ? 'flex' : 'none';
+  document.getElementById('search-btn').disabled = on;
+  document.getElementById('search-btn').textContent = on ? 'Searching…' : 'Search';
+}
+
+function showError(title, msg, hint = '') {
+  document.getElementById('err-title').textContent = title;
+  document.getElementById('err-msg').textContent = msg;
+  document.getElementById('err-hint').textContent = hint;
+  showPanel('p-error');
+}
+
+// ── Main search ───────────────────────────────────────────────────────────────
+async function search() {
+  const address = document.getElementById('addr-input').value.trim();
+  if (!address) return;
+
+  setSearching(true);
+  clearMapLayers();
+
+  try {
+    // 1. Geocode
+    const geo = await geocode(address);
+    if (!geo) {
+      showError(
+        'Address Not Found',
+        'No match was found for that address.',
+        'Try including the full street number, street name, city, and state abbreviation.'
+      );
+      setSearching(false);
+      return;
+    }
+
+    const { lat, lng, matchedAddress, tractFips, countyFips } = geo;
+
+    // 2. Parallel: tract boundary + NRI + building
+    const [tractRes, nriRes, buildRes] = await Promise.allSettled([
+      tractFips ? fetchTractBoundary(tractFips) : Promise.resolve(null),
+      fetchNRI(tractFips, countyFips),
+      fetchBuilding(lat, lng),
+    ]);
+
+    const tractFeature   = tractRes.status === 'fulfilled'  ? tractRes.value   : null;
+    const nriData        = nriRes.status === 'fulfilled'    ? nriRes.value     : null;
+    const buildingFeature = buildRes.status === 'fulfilled' ? buildRes.value   : null;
+
+    // 3. Render
+    renderMap(lat, lng, tractFeature, buildingFeature, nriData);
+    renderDashboard(matchedAddress, geo, nriData);
+    showPanel('p-results');
+
+  } catch (err) {
+    console.error('[search]', err);
+    showError('Search Failed', err.message || 'An unexpected error occurred.', 'Check your network connection and try again.');
+  } finally {
+    setSearching(false);
+  }
+}
+
+// ── All-hazards expand/collapse ───────────────────────────────────────────────
+document.getElementById('all-toggle').addEventListener('click', () => {
+  const table = document.getElementById('all-table');
+  const chevron = document.getElementById('chevron');
+  const open = table.style.display === 'block';
+  table.style.display = open ? 'none' : 'block';
+  chevron.classList.toggle('open', !open);
+});
+
+// ── Event listeners ───────────────────────────────────────────────────────────
+document.getElementById('search-btn').addEventListener('click', search);
+document.getElementById('addr-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') search();
+});
+</script>
+</body>
+</html>
