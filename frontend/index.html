@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NOAA Sea Level Rise Explorer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+
+    #controls {
+      padding: 10px 16px;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-shrink: 0;
+    }
+
+    #controls h1 { font-size: 1rem; font-weight: 600; white-space: nowrap; }
+
+    #slider-group { display: flex; align-items: center; gap: 10px; }
+
+    #scenario-slider { width: 180px; accent-color: #00b4d8; cursor: pointer; }
+
+    #ft-display { min-width: 40px; font-weight: bold; color: #00b4d8; }
+
+    #status { margin-left: auto; font-size: 0.85rem; color: #aaa; font-style: italic; }
+
+    #map { flex: 1; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <h1>NOAA Sea Level Rise Explorer</h1>
+    <div id="slider-group">
+      <span>Sea level rise:</span>
+      <input type="range" id="scenario-slider" min="1" max="6" value="1" step="1">
+      <span id="ft-display">1 ft</span>
+    </div>
+    <span id="status">Loading...</span>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([37.5, -76], 7);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    let inundationLayer = null;
+    const statusEl = document.getElementById('status');
+    const ftDisplay = document.getElementById('ft-display');
+
+    const scenarioColors = {
+      1: '#caf0f8',
+      2: '#90e0ef',
+      3: '#48cae4',
+      4: '#0096c7',
+      5: '#0077b6',
+      6: '#03045e'
+    };
+
+    async function loadScenario(ft) {
+      ftDisplay.textContent = `${ft} ft`;
+      statusEl.textContent = 'Loading...';
+
+      if (inundationLayer) {
+        map.removeLayer(inundationLayer);
+        inundationLayer = null;
+      }
+
+      try {
+        const res = await fetch(
+          `/features/collections/public.slr_inundation/items?scenario=${ft}&limit=10000`
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const geojson = await res.json();
+        const count = geojson.features ? geojson.features.length : 0;
+
+        inundationLayer = L.geoJSON(geojson, {
+          style: {
+            color: scenarioColors[ft],
+            fillColor: scenarioColors[ft],
+            fillOpacity: 0.5,
+            weight: 0.5
+          },
+          onEachFeature: (feature, layer) => {
+            layer.bindPopup(
+              `<strong>Sea Level Rise Scenario</strong><br>` +
+              `Inundation depth: <b>${ft} ft</b>`
+            );
+          }
+        }).addTo(map);
+
+        statusEl.textContent = `${count} features loaded`;
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+        console.error(err);
+      }
+    }
+
+    document.getElementById('scenario-slider').addEventListener('input', e => {
+      loadScenario(parseInt(e.target.value, 10));
+    });
+
+    loadScenario(1);
+  </script>
+</body>
+</html>
