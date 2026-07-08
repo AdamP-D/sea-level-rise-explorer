@@ -551,16 +551,18 @@ function asNumber(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-// ── Endpoints: nginx proxy first, then the external API directly ─────────────
+// ── Endpoints: each API is tried in order until one responds ─────────────────
 // ArcGIS Online, TIGERweb, the Census geocoder, and Overpass all send CORS
-// headers, so a direct browser call works even if the proxy path fails.
+// headers, so direct browser calls work alongside the nginx proxy.
+// NRI goes direct-first: ArcGIS Online is CDN-backed and some Docker setups
+// can't proxy to it (e.g. no IPv6 route), while browsers reach it fine.
 const NRI_TRACTS = [
-  '/api/nri-tracts/0/query',
   'https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/National_Risk_Index_Census_Tracts/FeatureServer/0/query',
+  '/api/nri-tracts/0/query',
 ];
 const NRI_COUNTIES = [
-  '/api/nri-counties/0/query',
   'https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/National_Risk_Index_Counties/FeatureServer/0/query',
+  '/api/nri-counties/0/query',
 ];
 const TIGER_TRACTS = layerId => [
   `/api/tiger/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/${layerId}/query`,
