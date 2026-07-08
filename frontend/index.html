@@ -16,13 +16,6 @@
       --text:      #e8eaed;
       --muted:     #7a93b0;
       --accent:    #3b82f6;
-
-      --vhigh:     #dc2626;
-      --high:      #ea580c;
-      --mod:       #ca8a04;
-      --low:       #16a34a;
-      --vlow:      #2563eb;
-      --na:        #4b5563;
     }
 
     html, body { height: 100%; overflow: hidden; }
@@ -33,6 +26,8 @@
       display: flex;
       flex-direction: column;
     }
+
+    .hidden { display: none !important; }
 
     /* ── Header ─────────────────────────────────────────────────────────────── */
     #header {
@@ -53,17 +48,11 @@
       gap: 8px;
       font-weight: 700;
       font-size: 0.95rem;
-      color: var(--text);
       white-space: nowrap;
     }
     .brand-icon { font-size: 1.2rem; }
 
-    .search-wrap {
-      flex: 1;
-      max-width: 600px;
-      display: flex;
-      gap: 8px;
-    }
+    .search-wrap { flex: 1; max-width: 600px; display: flex; gap: 8px; }
 
     #addr-input {
       flex: 1;
@@ -95,26 +84,18 @@
     #search-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
     /* ── Body layout ─────────────────────────────────────────────────────────── */
-    #body {
-      flex: 1;
-      display: flex;
-      overflow: hidden;
-    }
+    #body { flex: 1; display: flex; overflow: hidden; }
 
     /* ── Map ─────────────────────────────────────────────────────────────────── */
-    #map-wrap {
-      flex: 1;
-      position: relative;
-      min-width: 0;
-    }
-    #map { width: 100%; height: 100%; }
+    #map-wrap { flex: 1; position: relative; min-width: 0; }
+    #map { width: 100%; height: 100%; background: #0a1017; }
 
     #map-spinner {
-      display: none;
       position: absolute;
       inset: 0;
       background: rgba(15, 25, 35, 0.65);
       z-index: 500;
+      display: flex;
       align-items: center;
       justify-content: center;
       flex-direction: column;
@@ -131,6 +112,25 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* NRI legend (Leaflet control) */
+    .nri-legend {
+      background: rgba(26, 35, 50, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 0.7rem;
+      line-height: 1.9;
+    }
+    .nri-legend .lg-title { font-weight: 700; font-size: 0.72rem; margin-bottom: 4px; }
+    .nri-legend .lg-row { display: flex; align-items: center; gap: 7px; }
+    .nri-legend .lg-swatch {
+      width: 14px; height: 14px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      opacity: 0.85;
+    }
+
     /* ── Dashboard sidebar ───────────────────────────────────────────────────── */
     #dash {
       width: 380px;
@@ -142,9 +142,7 @@
       overflow: hidden;
     }
 
-    /* Shared panel styles */
     .panel { display: flex; flex-direction: column; flex: 1; overflow-y: auto; }
-    .panel.hidden { display: none; }
 
     /* ── Empty state ─────────────────────────────────────────────────────────── */
     #p-empty {
@@ -169,18 +167,13 @@
     }
 
     /* ── Error state ─────────────────────────────────────────────────────────── */
-    #p-error {
-      padding: 28px 24px;
-      gap: 10px;
-    }
+    #p-error { padding: 28px 24px; gap: 10px; }
     #p-error .err-icon { font-size: 1.8rem; }
     #p-error .err-title { font-weight: 700; font-size: 0.95rem; color: #f87171; }
     #p-error .err-msg { font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
     #p-error .err-hint { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
 
     /* ── Results panel ───────────────────────────────────────────────────────── */
-    #p-results { gap: 0; }
-
     .ds { padding: 14px 18px; border-bottom: 1px solid var(--border); }
     .ds-label {
       font-size: 0.68rem;
@@ -191,11 +184,9 @@
       margin-bottom: 8px;
     }
 
-    /* Property */
     .prop-addr { font-size: 0.88rem; font-weight: 600; line-height: 1.4; margin-bottom: 4px; }
     .prop-meta { font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
 
-    /* Composite score card */
     .score-card {
       display: flex;
       align-items: center;
@@ -205,13 +196,7 @@
       padding: 14px;
     }
 
-    .gauge-wrap {
-      position: relative;
-      width: 76px; height: 76px;
-      flex-shrink: 0;
-    }
-    .gauge-wrap svg { transform: rotate(-90deg); }
-    .gauge-bg { stroke: var(--border); }
+    .gauge-wrap { position: relative; width: 76px; height: 76px; flex-shrink: 0; }
     .gauge-fill { transition: stroke-dasharray 0.7s ease; }
     .gauge-center {
       position: absolute;
@@ -235,7 +220,13 @@
     }
     .score-info .detail { font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
 
-    /* Insight block */
+    .granularity-note {
+      margin-top: 8px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
     .insight {
       font-size: 0.82rem;
       line-height: 1.65;
@@ -245,7 +236,6 @@
       border-left: 3px solid var(--accent);
     }
 
-    /* Top hazard cards */
     .hz-cards { display: flex; flex-direction: column; gap: 8px; }
     .hz-card {
       display: flex;
@@ -261,9 +251,9 @@
     .hz-card-info { flex: 1; min-width: 0; }
     .hz-card-name { font-size: 0.83rem; font-weight: 600; }
     .hz-card-rating { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+    .hz-card-desc { font-size: 0.72rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
     .hz-card-score { font-size: 0.88rem; font-weight: 700; flex-shrink: 0; }
 
-    /* All-hazards toggle */
     #all-toggle {
       display: flex;
       align-items: center;
@@ -281,11 +271,10 @@
     .chevron { transition: transform 0.2s; display: inline-block; }
     .chevron.open { transform: rotate(180deg); }
 
-    /* Hazard table rows */
     #all-table { display: none; }
     .ht-row {
       display: grid;
-      grid-template-columns: 22px 1fr 54px 92px;
+      grid-template-columns: 22px 1fr 54px 96px;
       align-items: center;
       gap: 8px;
       padding: 8px 18px;
@@ -296,7 +285,6 @@
     .ht-row:hover { background: var(--bg-hover); }
     .ht-row.na { opacity: 0.38; }
     .ht-icon { text-align: center; font-size: 0.85rem; }
-    .ht-name { color: var(--text); }
     .ht-score { font-weight: 700; text-align: right; }
     .ht-badge {
       padding: 1px 7px;
@@ -306,20 +294,19 @@
       text-align: center;
     }
 
-    /* Attribution */
     .attrib { font-size: 0.7rem; color: var(--muted); line-height: 1.7; }
     .attrib a { color: var(--accent); text-decoration: none; }
     .attrib a:hover { text-decoration: underline; }
 
-    /* Rating color utilities */
-    .c-vhigh  { color: var(--vhigh); } .bg-vhigh  { background: #450a0a; color: #fca5a5; }
-    .c-high   { color: var(--high);  } .bg-high   { background: #431407; color: #fdba74; }
-    .c-mod    { color: var(--mod);   } .bg-mod    { background: #422006; color: #fde68a; }
-    .c-low    { color: var(--low);   } .bg-low    { background: #052e16; color: #86efac; }
-    .c-vlow   { color: var(--vlow);  } .bg-vlow   { background: #172554; color: #93c5fd; }
-    .c-na     { color: var(--na);    } .bg-na     { background: #1f2937; color: #9ca3af; }
+    /* Rating badge colors */
+    .bg-vhigh { background: #450a0a; color: #fca5a5; }
+    .bg-high  { background: #431407; color: #fdba74; }
+    .bg-mod   { background: #422006; color: #fde68a; }
+    .bg-low   { background: #052e16; color: #86efac; }
+    .bg-vlow  { background: #172554; color: #93c5fd; }
+    .bg-na    { background: #1f2937; color: #9ca3af; }
 
-    /* Leaflet overrides */
+    /* Leaflet dark-theme overrides */
     .leaflet-control-attribution {
       background: rgba(15, 25, 35, 0.8) !important;
       color: var(--muted) !important;
@@ -357,7 +344,7 @@
   <!-- Map panel -->
   <div id="map-wrap">
     <div id="map"></div>
-    <div id="map-spinner">
+    <div id="map-spinner" class="hidden">
       <div class="spin"></div>
       <p>Locating property...</p>
     </div>
@@ -367,7 +354,7 @@
   <aside id="dash">
 
     <!-- Empty state -->
-    <div id="p-empty" class="panel" style="display:flex">
+    <div id="p-empty" class="panel">
       <div class="empty-icon">🗺️</div>
       <h2>Property Risk Explorer</h2>
       <p>Enter any US street address to view the FEMA National Risk Index assessment for that location.</p>
@@ -391,24 +378,24 @@
     <div id="p-results" class="panel hidden">
 
       <!-- Property -->
-      <div class="ds" id="ds-property">
+      <div class="ds">
         <div class="ds-label">Property</div>
         <div class="prop-addr" id="r-addr"></div>
         <div class="prop-meta" id="r-meta"></div>
       </div>
 
       <!-- Composite NRI score -->
-      <div class="ds" id="ds-score">
+      <div class="ds">
         <div class="ds-label">FEMA National Risk Index</div>
         <div id="score-unavail" class="hidden" style="font-size:0.8rem;color:var(--muted);line-height:1.6">
-          NRI data is not available for this census tract.
+          NRI data is not available for this location.
           <a href="https://hazards.fema.gov/nri/map" target="_blank" rel="noopener"
-             style="color:var(--accent)">View on FEMA's map →</a>
+             style="color:var(--accent)">View FEMA's NRI map →</a>
         </div>
         <div id="score-card" class="score-card">
           <div class="gauge-wrap">
             <svg width="76" height="76" viewBox="0 0 76 76">
-              <circle class="gauge-bg" cx="38" cy="38" r="30" fill="none" stroke-width="6"/>
+              <circle cx="38" cy="38" r="30" fill="none" stroke="#2d3f55" stroke-width="6"/>
               <circle id="gauge-fill" class="gauge-fill" cx="38" cy="38" r="30" fill="none"
                       stroke-width="6" stroke-linecap="round"
                       stroke-dasharray="0 188.5" transform="rotate(-90 38 38)"/>
@@ -424,22 +411,25 @@
             <div class="detail" id="pctl-note"></div>
           </div>
         </div>
+        <div id="granularity-note" class="granularity-note hidden">
+          Tract-level data unavailable — showing county-level scores.
+        </div>
       </div>
 
       <!-- Insight -->
-      <div class="ds" id="ds-insight" class="hidden">
+      <div class="ds" id="ds-insight">
         <div class="ds-label">Risk Assessment</div>
         <div class="insight" id="r-insight"></div>
       </div>
 
       <!-- Key risk factors (top 3) -->
-      <div class="ds" id="ds-top">
+      <div class="ds">
         <div class="ds-label">Key Risk Factors</div>
         <div class="hz-cards" id="r-top-cards"></div>
       </div>
 
       <!-- All 18 hazards (expandable) -->
-      <div id="ds-all">
+      <div>
         <div id="all-toggle">
           <span>All 18 Hazard Types</span>
           <span class="chevron" id="chevron">▼</span>
@@ -466,7 +456,7 @@
 <script>
 'use strict';
 
-// ── Hazard catalogue ──────────────────────────────────────────────────────────
+// ── Hazard catalogue (FEMA NRI prefixes) ──────────────────────────────────────
 const HAZARDS = [
   { code: 'AVLN', name: 'Avalanche',          icon: '🏔️' },
   { code: 'CFLD', name: 'Coastal Flooding',   icon: '🌊' },
@@ -482,7 +472,7 @@ const HAZARDS = [
   { code: 'RFLD', name: 'Riverine Flooding',   icon: '🏞️' },
   { code: 'SWND', name: 'Strong Wind',         icon: '💨' },
   { code: 'TRND', name: 'Tornado',             icon: '🌪️' },
-  { code: 'TSUN', name: 'Tsunami',             icon: '🏄' },
+  { code: 'TSUN', name: 'Tsunami',             icon: '🌊' },
   { code: 'VLCN', name: 'Volcanic Activity',   icon: '🌋' },
   { code: 'WFIR', name: 'Wildfire',            icon: '🔥' },
   { code: 'WNTW', name: 'Winter Weather',      icon: '❄️' },
@@ -491,46 +481,56 @@ const HAZARDS = [
 const HAZARD_DESC = {
   AVLN: 'Snow or ice masses sliding rapidly down steep terrain, threatening structures below.',
   CFLD: 'Seawater inundating low-lying coastal land during storms or high tides.',
-  CWAV: 'Extended periods of abnormally cold temperatures that strain heating systems and infrastructure.',
-  DRGT: 'Prolonged water deficits that damage foundations, increase wildfire risk, and stress crops.',
+  CWAV: 'Extended periods of abnormally cold temperatures that strain heating systems and pipes.',
+  DRGT: 'Prolonged water deficits that damage foundations and heighten wildfire risk.',
   ERQK: 'Ground shaking from seismic events that can damage or collapse structures.',
   HAIL: 'Balls of ice from thunderstorms causing roof, window, and vehicle damage.',
   HWAV: 'Extended periods of extreme heat that damage materials and create health emergencies.',
   HRCN: 'Tropical cyclones bringing storm surge, destructive winds, and extreme rainfall.',
   ISTM: 'Freezing rain that coats surfaces with ice, collapsing roofs and snapping power lines.',
   LNDS: 'Rapid downslope movement of soil and rock that can instantly destroy structures.',
-  LTNG: 'Electrical discharge that can ignite fires, damage electronics, and cause structural harm.',
+  LTNG: 'Electrical discharge that can ignite fires and damage electronics and structures.',
   RFLD: 'Overflowing rivers and streams that inundate surrounding land and structures.',
-  SWND: 'Straight-line winds from thunderstorms or derechos causing widespread structural damage.',
+  SWND: 'Straight-line winds from thunderstorms causing widespread structural damage.',
   TRND: 'Violently rotating columns of air capable of catastrophic property destruction.',
-  TSUN: 'Large ocean waves triggered by earthquakes or landslides that devastate coastlines.',
+  TSUN: 'Large ocean waves triggered by earthquakes that devastate low-lying coastlines.',
   VLCN: 'Lava flows, ash fall, and pyroclastic hazards from active volcanoes.',
   WFIR: 'Uncontrolled fire burning across vegetation that threatens structures and air quality.',
   WNTW: 'Snow, blizzards, and freezing conditions that isolate and damage properties.',
 };
 
-// ── Risk rating helpers ───────────────────────────────────────────────────────
-const RATINGS = {
-  'Very High':            { cls: 'vhigh', bg: 'bg-vhigh', label: 'Very High' },
-  'Relatively High':      { cls: 'high',  bg: 'bg-high',  label: 'Relatively High' },
-  'Relatively Moderate':  { cls: 'mod',   bg: 'bg-mod',   label: 'Relatively Moderate' },
-  'Relatively Low':       { cls: 'low',   bg: 'bg-low',   label: 'Relatively Low' },
-  'Very Low':             { cls: 'vlow',  bg: 'bg-vlow',  label: 'Very Low' },
-  'Not Applicable':       { cls: 'na',    bg: 'bg-na',    label: 'N/A' },
-  'No Rating':            { cls: 'na',    bg: 'bg-na',    label: 'No Rating' },
+// ── Rating / color helpers ────────────────────────────────────────────────────
+// Literal hex values (NOT CSS vars) — Leaflet writes these into SVG attributes,
+// where var() is not resolved.
+const COLOR = {
+  vhigh: '#dc2626',
+  high:  '#ea580c',
+  mod:   '#ca8a04',
+  low:   '#16a34a',
+  vlow:  '#2563eb',
+  na:    '#4b5563',
 };
 
-function rating(str) {
-  return RATINGS[str] || RATINGS['No Rating'];
-}
+const RATINGS = {
+  'Very High':           { key: 'vhigh', bg: 'bg-vhigh', label: 'Very High' },
+  'Relatively High':     { key: 'high',  bg: 'bg-high',  label: 'Relatively High' },
+  'Relatively Moderate': { key: 'mod',   bg: 'bg-mod',   label: 'Relatively Moderate' },
+  'Relatively Low':      { key: 'low',   bg: 'bg-low',   label: 'Relatively Low' },
+  'Very Low':            { key: 'vlow',  bg: 'bg-vlow',  label: 'Very Low' },
+  'Not Applicable':      { key: 'na',    bg: 'bg-na',    label: 'N/A' },
+  'Insufficient Data':   { key: 'na',    bg: 'bg-na',    label: 'Insufficient Data' },
+  'No Rating':           { key: 'na',    bg: 'bg-na',    label: 'No Rating' },
+};
+
+function rating(str) { return RATINGS[str] || RATINGS['No Rating']; }
 
 function scoreColor(score) {
-  if (score == null) return 'var(--na)';
-  if (score >= 80) return 'var(--vhigh)';
-  if (score >= 60) return 'var(--high)';
-  if (score >= 40) return 'var(--mod)';
-  if (score >= 20) return 'var(--low)';
-  return 'var(--vlow)';
+  if (score == null) return COLOR.na;
+  if (score >= 80) return COLOR.vhigh;
+  if (score >= 60) return COLOR.high;
+  if (score >= 40) return COLOR.mod;
+  if (score >= 20) return COLOR.low;
+  return COLOR.vlow;
 }
 
 function scoreRating(score) {
@@ -543,8 +543,12 @@ function scoreRating(score) {
 }
 
 function esc(s) {
-  return String(s ?? '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function asNumber(v) {
+  const n = typeof v === 'string' ? parseFloat(v) : v;
+  return Number.isFinite(n) ? n : null;
 }
 
 // ── Map setup ─────────────────────────────────────────────────────────────────
@@ -558,6 +562,22 @@ L.tileLayer(
   }
 ).addTo(map);
 
+// NRI color legend
+const legend = L.control({ position: 'bottomleft' });
+legend.onAdd = () => {
+  const div = L.DomUtil.create('div', 'nri-legend');
+  const rows = [
+    ['Very High', COLOR.vhigh], ['Relatively High', COLOR.high],
+    ['Relatively Moderate', COLOR.mod], ['Relatively Low', COLOR.low],
+    ['Very Low', COLOR.vlow],
+  ];
+  div.innerHTML = '<div class="lg-title">NRI Risk</div>' + rows.map(([label, c]) =>
+    `<div class="lg-row"><span class="lg-swatch" style="background:${c}"></span>${label}</div>`
+  ).join('');
+  return div;
+};
+legend.addTo(map);
+
 let tractLayer = null, buildingLayer = null, markerLayer = null;
 
 function clearMapLayers() {
@@ -567,74 +587,119 @@ function clearMapLayers() {
 
 // ── API: Census Geocoder ──────────────────────────────────────────────────────
 async function geocode(address) {
-  const p = new URLSearchParams({
-    address,
-    benchmark: 'Public_AR_Current',
-    vintage: 'Current_Current',
-    layers: 'Census Tracts',
-    format: 'json',
-  });
-  const res = await fetch(`/api/census/geocoder/geographies/onelineaddress?${p}`);
-  if (!res.ok) throw new Error(`Geocoder returned HTTP ${res.status}`);
-  const data = await res.json();
+  const call = async (withLayers) => {
+    const p = new URLSearchParams({
+      address,
+      benchmark: 'Public_AR_Current',
+      vintage: 'Current_Current',
+      format: 'json',
+    });
+    if (withLayers) p.set('layers', 'Census Tracts');
+    const res = await fetch(`/api/census/geocoder/geographies/onelineaddress?${p}`);
+    if (!res.ok) throw new Error(`Geocoder returned HTTP ${res.status}`);
+    return res.json();
+  };
 
-  const matches = data?.result?.addressMatches;
+  let data = await call(false);
+  let matches = data?.result?.addressMatches;
   if (!matches?.length) return null;
 
-  const m = matches[0];
-  const tract = m.geographies?.['Census Tracts']?.[0];
+  let tract = matches[0].geographies?.['Census Tracts']?.[0];
+  if (!tract) {
+    // Default layer set didn't include tracts — retry explicitly
+    data = await call(true);
+    matches = data?.result?.addressMatches;
+    if (!matches?.length) return null;
+    tract = matches[0].geographies?.['Census Tracts']?.[0];
+  }
 
+  const m = matches[0];
   return {
-    lat: m.coordinates.y,
-    lng: m.coordinates.x,
+    lat: asNumber(m.coordinates?.y),
+    lng: asNumber(m.coordinates?.x),
     matchedAddress: m.matchedAddress,
-    tractFips: tract?.GEOID ?? null,                      // 11-digit
-    countyFips: tract ? tract.STATE + tract.COUNTY : null, // 5-digit
+    tractFips: tract?.GEOID ?? null,                       // 11-digit
+    countyFips: tract ? `${tract.STATE}${tract.COUNTY}` : null, // 5-digit
   };
 }
 
-// ── API: Census TIGER tract boundary ─────────────────────────────────────────
-async function fetchTractBoundary(tractFips) {
-  const p = new URLSearchParams({
-    where: `GEOID='${tractFips}'`,
-    outFields: 'GEOID',
-    outSR: '4326',
-    f: 'geojson',
-  });
-  try {
-    const res = await fetch(
-      `/api/tiger/arcgis/rest/services/TIGERweb/tigerWMS_ACS2023/MapServer/8/query?${p}`
-    );
-    if (!res.ok) return null;
-    const gj = await res.json();
-    return gj?.features?.[0] ?? null;
-  } catch { return null; }
+// ── Esri JSON → GeoJSON polygon fallback converter ────────────────────────────
+function esriPolygonToGeoJSON(esriGeom) {
+  if (!esriGeom?.rings?.length) return null;
+  return { type: 'Polygon', coordinates: esriGeom.rings };
 }
 
-// ── API: FEMA NRI ─────────────────────────────────────────────────────────────
+// ── API: FEMA NRI (ArcGIS feature services) ──────────────────────────────────
+// Tract query returns BOTH the NRI attributes and the tract polygon.
+// Returns { props, boundaryFeature, level } or null.
 async function fetchNRI(tractFips, countyFips) {
-  // Try multiple known NRI endpoint patterns in order
-  const endpoints = [
-    tractFips  ? `/api/nri/api/historicRecordForTract?tractFips=${tractFips}` : null,
-    tractFips  ? `/api/nri/api/tracts/${tractFips}` : null,
-    countyFips ? `/api/nri/api/counties/${countyFips}` : null,
-  ].filter(Boolean);
-
-  for (const url of endpoints) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const raw = await res.json();
-      const d = Array.isArray(raw) ? raw[0] : (raw?.data ?? raw);
-      if (d && (d.RISK_SCORE != null || d.RISK_RATNG)) {
-        console.info('[NRI] loaded from', url);
-        return d;
-      }
-    } catch (e) {
-      console.warn('[NRI] endpoint failed:', url, e.message);
-    }
+  // 1. Tract-level (preferred)
+  if (tractFips) {
+    const t = await queryFeature(
+      `/api/nri-tracts/0/query`, `TRACTFIPS='${tractFips}'`, true
+    );
+    if (t) return { props: t.props, boundaryFeature: t.feature, level: 'tract' };
   }
-  console.warn('[NRI] all endpoints failed — no NRI data');
+  // 2. County-level fallback (no geometry — county polygons are huge)
+  if (countyFips) {
+    const c = await queryFeature(
+      `/api/nri-counties/0/query`, `STCOFIPS='${countyFips}'`, false
+    );
+    if (c) return { props: c.props, boundaryFeature: null, level: 'county' };
+  }
+  return null;
+}
+
+// Query an ArcGIS feature layer; tries GeoJSON, falls back to Esri JSON.
+async function queryFeature(endpoint, where, withGeometry) {
+  const base = {
+    where,
+    outFields: '*',
+    returnGeometry: String(withGeometry),
+    outSR: '4326',
+  };
+
+  // Attempt 1: GeoJSON
+  try {
+    const p = new URLSearchParams({ ...base, f: 'geojson' });
+    const res = await fetch(`${endpoint}?${p}`);
+    if (res.ok) {
+      const gj = await res.json();
+      const f = gj?.features?.[0];
+      if (f?.properties) return { props: f.properties, feature: withGeometry ? f : null };
+    }
+  } catch (e) { console.warn('[NRI] geojson query failed:', e.message); }
+
+  // Attempt 2: Esri JSON
+  try {
+    const p = new URLSearchParams({ ...base, f: 'json' });
+    const res = await fetch(`${endpoint}?${p}`);
+    if (res.ok) {
+      const ej = await res.json();
+      const f = ej?.features?.[0];
+      if (f?.attributes) {
+        const geom = withGeometry ? esriPolygonToGeoJSON(f.geometry) : null;
+        return {
+          props: f.attributes,
+          feature: geom ? { type: 'Feature', geometry: geom, properties: f.attributes } : null,
+        };
+      }
+    }
+  } catch (e) { console.warn('[NRI] esri-json query failed:', e.message); }
+
+  return null;
+}
+
+// ── API: Census TIGERweb tract boundary (fallback when NRI has no geometry) ──
+async function fetchTractBoundary(tractFips) {
+  // Census Tracts live at layer 0 (current vintage) and layer 4 in Tracts_Blocks
+  for (const layerId of [0, 4]) {
+    const r = await queryFeature(
+      `/api/tiger/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/${layerId}/query`,
+      `GEOID='${tractFips}'`, true
+    );
+    if (r?.feature) return r.feature;
+  }
   return null;
 }
 
@@ -654,7 +719,6 @@ async function fetchBuilding(lat, lng) {
 }
 
 function osmBestBuilding(elements, lat, lng) {
-  // Pick the way with valid geometry whose centroid is closest to target
   let best = null, bestDist = Infinity;
   for (const el of elements) {
     if (el.type !== 'way' || !el.geometry?.length) continue;
@@ -666,27 +730,32 @@ function osmBestBuilding(elements, lat, lng) {
     if (dist < bestDist) { bestDist = dist; best = coords; }
   }
   if (!best) return null;
-  if (best[0][0] !== best[best.length - 1][0]) best.push(best[0]);
+  const [fx, fy] = best[0], [lx, ly] = best[best.length - 1];
+  if (fx !== lx || fy !== ly) best.push(best[0]);
   return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [best] }, properties: {} };
 }
 
 // ── Map rendering ─────────────────────────────────────────────────────────────
-function renderMap(lat, lng, tractFeature, buildingFeature, nriData) {
+function renderMap(lat, lng, tractFeature, buildingFeature, nriProps) {
   clearMapLayers();
 
-  const compRating = nriData?.RISK_RATNG || scoreRating(nriData?.RISK_SCORE);
-  const color = scoreColor(nriData?.RISK_SCORE);
+  const score = asNumber(nriProps?.RISK_SCORE);
+  const ratingStr = nriProps?.RISK_RATNG || scoreRating(score);
+  const color = scoreColor(score);
 
   if (tractFeature) {
     tractLayer = L.geoJSON(tractFeature, {
       style: { color, weight: 2, fillColor: color, fillOpacity: 0.28, opacity: 0.85 }
-    }).addTo(map);
+    }).bindPopup(
+      `<strong>Census Tract</strong><br>` +
+      `NRI Composite: <b style="color:${color}">${score != null ? score.toFixed(1) : '—'}</b> · ${esc(ratingStr)}`
+    ).addTo(map);
   }
 
   if (buildingFeature) {
     buildingLayer = L.geoJSON(buildingFeature, {
-      style: { color: '#f97316', weight: 2.5, fillColor: '#f97316', fillOpacity: 0.45, opacity: 1 }
-    }).addTo(map);
+      style: { color: '#f97316', weight: 2.5, fillColor: '#f97316', fillOpacity: 0.35, opacity: 1 }
+    }).bindPopup('<strong>Property outline</strong><br>Source: OpenStreetMap').addTo(map);
   }
 
   const icon = L.divIcon({
@@ -697,88 +766,102 @@ function renderMap(lat, lng, tractFeature, buildingFeature, nriData) {
   });
   markerLayer = L.marker([lat, lng], { icon }).addTo(map);
 
-  if (tractLayer) {
-    map.fitBounds(tractLayer.getBounds(), { padding: [40, 40], maxZoom: 15 });
-  } else {
-    map.flyTo([lat, lng], 15, { duration: 1.2 });
+  // Prioritize seeing the property itself; the tract overlay colors the
+  // surrounding area at any zoom.
+  if (buildingLayer) {
+    map.fitBounds(buildingLayer.getBounds(), { padding: [80, 80], maxZoom: 19 });
+  } else if (lat != null && lng != null) {
+    map.flyTo([lat, lng], 17, { duration: 1.0 });
+  } else if (tractLayer) {
+    map.fitBounds(tractLayer.getBounds(), { padding: [40, 40] });
   }
 }
 
 // ── Dashboard rendering ───────────────────────────────────────────────────────
-function renderDashboard(matchedAddress, geo, nriData) {
+function renderDashboard(geo, nri) {
+  const nriProps = nri?.props ?? null;
+
   // Property section
-  document.getElementById('r-addr').textContent = matchedAddress || geo.matchedAddress;
-  const meta = [geo.tractFips ? `Census Tract ${geo.tractFips}` : null].filter(Boolean).join(' · ');
-  document.getElementById('r-meta').textContent = meta;
+  document.getElementById('r-addr').textContent = geo.matchedAddress || '';
+  document.getElementById('r-meta').textContent =
+    geo.tractFips ? `Census Tract ${geo.tractFips}` : '';
 
   // Composite score
-  const score = nriData?.RISK_SCORE ?? null;
-  const ratingStr = nriData?.RISK_RATNG || (score != null ? scoreRating(score) : null);
-  const pctl = nriData?.RISK_NPCTL ?? null;
+  const score = asNumber(nriProps?.RISK_SCORE);
+  const ratingStr = nriProps?.RISK_RATNG || (score != null ? scoreRating(score) : null);
+  const pctl = asNumber(nriProps?.RISK_NPCTL);
 
-  if (!nriData || (score == null && !ratingStr)) {
+  document.getElementById('granularity-note').classList.toggle(
+    'hidden', nri?.level !== 'county'
+  );
+
+  if (!nriProps || (score == null && !ratingStr)) {
     document.getElementById('score-card').classList.add('hidden');
     document.getElementById('score-unavail').classList.remove('hidden');
   } else {
     document.getElementById('score-unavail').classList.add('hidden');
     document.getElementById('score-card').classList.remove('hidden');
 
-    const r30 = 30, circ = 2 * Math.PI * r30;
+    const circ = 2 * Math.PI * 30;
     const filled = score != null ? (Math.min(score, 100) / 100) * circ : 0;
     const color = scoreColor(score);
 
-    document.getElementById('gauge-fill').setAttribute('stroke', color);
-    document.getElementById('gauge-fill').setAttribute('stroke-dasharray', `${filled} ${circ - filled}`);
+    const gauge = document.getElementById('gauge-fill');
+    gauge.setAttribute('stroke', color);
+    gauge.setAttribute('stroke-dasharray', `${filled} ${circ - filled}`);
     document.getElementById('gauge-num').textContent = score != null ? score.toFixed(1) : '—';
     document.getElementById('gauge-num').style.color = color;
 
     const badge = document.getElementById('rating-badge');
     badge.textContent = ratingStr || 'No Rating';
-    badge.className = 'rating-badge ' + (rating(ratingStr)?.bg || 'bg-na');
+    badge.className = 'rating-badge ' + rating(ratingStr).bg;
 
     document.getElementById('pctl-note').textContent =
-      pctl != null ? `Higher than ${pctl.toFixed(0)}% of US census tracts` : '';
+      pctl != null ? `Riskier than ${pctl.toFixed(0)}% of US ${nri.level === 'county' ? 'counties' : 'census tracts'}` : '';
   }
 
-  // Hazard scores
+  // Per-hazard scores
   const hazards = HAZARDS.map(h => {
-    const s = nriData?.[`${h.code}_RISKS`] ?? null;
-    const r = nriData?.[`${h.code}_RISKR`] ?? (s != null ? scoreRating(s) : 'Not Applicable');
+    const s = asNumber(nriProps?.[`${h.code}_RISKS`]);
+    const r = nriProps?.[`${h.code}_RISKR`] || (s != null ? scoreRating(s) : 'Not Applicable');
     return { ...h, score: s, ratingStr: r };
   }).sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
 
-  const applicable = hazards.filter(
-    h => h.ratingStr !== 'Not Applicable' && h.score != null
+  const applicable = hazards.filter(h =>
+    h.score != null && !['Not Applicable', 'Insufficient Data'].includes(h.ratingStr)
   );
   const top3 = applicable.slice(0, 3);
 
   // Insight
   const dsInsight = document.getElementById('ds-insight');
-  if (top3.length > 0 && nriData) {
-    const parts = top3.slice(0, 2).map(h => `<strong>${h.name}</strong> (${rating(h.ratingStr).label})`);
-    const text = `This property is in a <strong>${ratingStr || 'unrated'}</strong> composite risk area, with ${parts.join(' and ')} as the primary concerns.`;
-    document.getElementById('r-insight').innerHTML = text;
-    dsInsight.style.display = '';
+  if (top3.length > 0) {
+    const parts = top3.slice(0, 2).map(h =>
+      `<strong>${esc(h.name)}</strong> (${esc(rating(h.ratingStr).label)})`);
+    document.getElementById('r-insight').innerHTML =
+      `This property is in a <strong>${esc(ratingStr || 'unrated')}</strong> composite risk area. ` +
+      `The primary concern${parts.length > 1 ? 's are' : ' is'} ${parts.join(' and ')}.`;
+    dsInsight.classList.remove('hidden');
   } else {
-    dsInsight.style.display = 'none';
+    dsInsight.classList.add('hidden');
   }
 
   // Top 3 cards
   const topContainer = document.getElementById('r-top-cards');
   if (top3.length === 0) {
-    topContainer.innerHTML = '<p style="font-size:0.8rem;color:var(--muted)">No significant hazards identified for this location.</p>';
+    topContainer.innerHTML =
+      '<p style="font-size:0.8rem;color:var(--muted)">No significant hazards identified for this location.</p>';
   } else {
     topContainer.innerHTML = top3.map(h => {
-      const r = rating(h.ratingStr);
       const c = scoreColor(h.score);
       return `
         <div class="hz-card" style="border-left-color:${c}">
           <span class="hz-card-icon">${h.icon}</span>
           <div class="hz-card-info">
             <div class="hz-card-name">${esc(h.name)}</div>
-            <div class="hz-card-rating">${esc(r.label)}</div>
+            <div class="hz-card-rating">${esc(rating(h.ratingStr).label)}</div>
+            <div class="hz-card-desc">${esc(HAZARD_DESC[h.code] || '')}</div>
           </div>
-          <span class="hz-card-score" style="color:${c}">${h.score != null ? h.score.toFixed(1) : '—'}</span>
+          <span class="hz-card-score" style="color:${c}">${h.score.toFixed(1)}</span>
         </div>`;
     }).join('');
   }
@@ -786,34 +869,29 @@ function renderDashboard(matchedAddress, geo, nriData) {
   // All-hazards table
   document.getElementById('all-table').innerHTML = hazards.map(h => {
     const r = rating(h.ratingStr);
-    const isNA = r.cls === 'na';
-    const c = scoreColor(h.score);
+    const isNA = r.key === 'na';
     return `
       <div class="ht-row${isNA ? ' na' : ''}">
         <span class="ht-icon">${h.icon}</span>
         <span class="ht-name">${esc(h.name)}</span>
-        <span class="ht-score" style="color:${isNA ? 'var(--na)' : c}">${h.score != null ? h.score.toFixed(1) : '—'}</span>
-        <span class="ht-badge ${r.bg}">${r.label}</span>
+        <span class="ht-score" style="color:${isNA ? COLOR.na : scoreColor(h.score)}">${h.score != null ? h.score.toFixed(1) : '—'}</span>
+        <span class="ht-badge ${r.bg}">${esc(r.label)}</span>
       </div>`;
   }).join('');
 }
 
 // ── UI state helpers ──────────────────────────────────────────────────────────
 function showPanel(id) {
-  ['p-empty','p-error','p-results'].forEach(pid => {
-    const el = document.getElementById(pid);
-    el.classList.toggle('hidden', pid !== id);
-    if (pid !== 'p-empty') el.style.display = pid === id ? 'flex' : 'none';
-  });
-  if (id === 'p-empty') {
-    document.getElementById('p-empty').style.display = 'flex';
+  for (const pid of ['p-empty', 'p-error', 'p-results']) {
+    document.getElementById(pid).classList.toggle('hidden', pid !== id);
   }
 }
 
 function setSearching(on) {
-  document.getElementById('map-spinner').style.display = on ? 'flex' : 'none';
-  document.getElementById('search-btn').disabled = on;
-  document.getElementById('search-btn').textContent = on ? 'Searching…' : 'Search';
+  document.getElementById('map-spinner').classList.toggle('hidden', !on);
+  const btn = document.getElementById('search-btn');
+  btn.disabled = on;
+  btn.textContent = on ? 'Searching…' : 'Search';
 }
 
 function showError(title, msg, hint = '') {
@@ -824,62 +902,69 @@ function showError(title, msg, hint = '') {
 }
 
 // ── Main search ───────────────────────────────────────────────────────────────
+let searchSeq = 0;
+
 async function search() {
   const address = document.getElementById('addr-input').value.trim();
   if (!address) return;
 
+  const seq = ++searchSeq;
   setSearching(true);
-  clearMapLayers();
 
   try {
     // 1. Geocode
     const geo = await geocode(address);
-    if (!geo) {
+    if (seq !== searchSeq) return;  // superseded by a newer search
+    if (!geo || geo.lat == null || geo.lng == null) {
       showError(
         'Address Not Found',
         'No match was found for that address.',
         'Try including the full street number, street name, city, and state abbreviation.'
       );
-      setSearching(false);
       return;
     }
 
-    const { lat, lng, matchedAddress, tractFips, countyFips } = geo;
-
-    // 2. Parallel: tract boundary + NRI + building
-    const [tractRes, nriRes, buildRes] = await Promise.allSettled([
-      tractFips ? fetchTractBoundary(tractFips) : Promise.resolve(null),
-      fetchNRI(tractFips, countyFips),
-      fetchBuilding(lat, lng),
+    // 2. Parallel: NRI scores (+tract geometry) and building footprint
+    const [nriRes, buildRes] = await Promise.allSettled([
+      fetchNRI(geo.tractFips, geo.countyFips),
+      fetchBuilding(geo.lat, geo.lng),
     ]);
+    if (seq !== searchSeq) return;
 
-    const tractFeature   = tractRes.status === 'fulfilled'  ? tractRes.value   : null;
-    const nriData        = nriRes.status === 'fulfilled'    ? nriRes.value     : null;
-    const buildingFeature = buildRes.status === 'fulfilled' ? buildRes.value   : null;
+    const nri = nriRes.status === 'fulfilled' ? nriRes.value : null;
+    const building = buildRes.status === 'fulfilled' ? buildRes.value : null;
 
-    // 3. Render
-    renderMap(lat, lng, tractFeature, buildingFeature, nriData);
-    renderDashboard(matchedAddress, geo, nriData);
+    // 3. Tract boundary: prefer geometry from the NRI query itself;
+    //    fall back to TIGERweb if missing.
+    let tractFeature = nri?.boundaryFeature ?? null;
+    if (!tractFeature && geo.tractFips) {
+      tractFeature = await fetchTractBoundary(geo.tractFips);
+      if (seq !== searchSeq) return;
+    }
+
+    // 4. Render
+    renderMap(geo.lat, geo.lng, tractFeature, building, nri?.props ?? null);
+    renderDashboard(geo, nri);
     showPanel('p-results');
 
   } catch (err) {
+    if (seq !== searchSeq) return;
     console.error('[search]', err);
-    showError('Search Failed', err.message || 'An unexpected error occurred.', 'Check your network connection and try again.');
+    showError('Search Failed', err.message || 'An unexpected error occurred.',
+              'Check your network connection and try again.');
   } finally {
-    setSearching(false);
+    if (seq === searchSeq) setSearching(false);
   }
 }
 
-// ── All-hazards expand/collapse ───────────────────────────────────────────────
+// ── Event listeners ───────────────────────────────────────────────────────────
 document.getElementById('all-toggle').addEventListener('click', () => {
   const table = document.getElementById('all-table');
-  const chevron = document.getElementById('chevron');
   const open = table.style.display === 'block';
   table.style.display = open ? 'none' : 'block';
-  chevron.classList.toggle('open', !open);
+  document.getElementById('chevron').classList.toggle('open', !open);
 });
 
-// ── Event listeners ───────────────────────────────────────────────────────────
 document.getElementById('search-btn').addEventListener('click', search);
 document.getElementById('addr-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') search();
