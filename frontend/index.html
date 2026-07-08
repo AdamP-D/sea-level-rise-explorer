@@ -388,7 +388,7 @@
       <div class="ds">
         <div class="ds-label">FEMA National Risk Index</div>
         <div id="score-unavail" class="hidden" style="font-size:0.8rem;color:var(--muted);line-height:1.6">
-          NRI data is not available for this location.
+          <span id="nri-unavail-msg">NRI data is not available for this location.</span>
           <a href="https://hazards.fema.gov/nri/map" target="_blank" rel="noopener"
              style="color:var(--accent)">View FEMA's NRI map →</a>
         </div>
@@ -551,6 +551,48 @@ function asNumber(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+// ── Endpoints: nginx proxy first, then the external API directly ─────────────
+// ArcGIS Online, TIGERweb, the Census geocoder, and Overpass all send CORS
+// headers, so a direct browser call works even if the proxy path fails.
+const NRI_TRACTS = [
+  '/api/nri-tracts/0/query',
+  'https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/National_Risk_Index_Census_Tracts/FeatureServer/0/query',
+];
+const NRI_COUNTIES = [
+  '/api/nri-counties/0/query',
+  'https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/National_Risk_Index_Counties/FeatureServer/0/query',
+];
+const TIGER_TRACTS = layerId => [
+  `/api/tiger/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/${layerId}/query`,
+  `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/${layerId}/query`,
+];
+const GEOCODER = [
+  '/api/census/geocoder/geographies/onelineaddress',
+  'https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress',
+];
+const OVERPASS = [
+  '/api/overpass/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+];
+
+let lastNriError = null;
+
+async function fetchFirst(urls, init) {
+  let lastErr = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, init);
+      if (res.ok) return res;
+      lastErr = `HTTP ${res.status} from ${url}`;
+      console.warn('[fetch]', lastErr);
+    } catch (e) {
+      lastErr = `${e.message} (${url})`;
+      console.warn('[fetch]', lastErr);
+    }
+  }
+  throw new Error(lastErr || 'all endpoints failed');
+}
+
 // ── Map setup ─────────────────────────────────────────────────────────────────
 const map = L.map('map', { zoomControl: true }).setView([39.5, -98.35], 4);
 
@@ -595,8 +637,7 @@ async function geocode(address) {
       format: 'json',
     });
     if (withLayers) p.set('layers', 'Census Tracts');
-    const res = await fetch(`/api/census/geocoder/geographies/onelineaddress?${p}`);
-    if (!res.ok) throw new Error(`Geocoder returned HTTP ${res.status}`);
+    const res = await fetchFirst(GEOCODER.map(e => `${e}?${p}`));
     return res.json();
   };
 
@@ -635,23 +676,20 @@ function esriPolygonToGeoJSON(esriGeom) {
 async function fetchNRI(tractFips, countyFips) {
   // 1. Tract-level (preferred)
   if (tractFips) {
-    const t = await queryFeature(
-      `/api/nri-tracts/0/query`, `TRACTFIPS='${tractFips}'`, true
-    );
+    const t = await queryFeature(NRI_TRACTS, `TRACTFIPS='${tractFips}'`, true);
     if (t) return { props: t.props, boundaryFeature: t.feature, level: 'tract' };
   }
   // 2. County-level fallback (no geometry — county polygons are huge)
   if (countyFips) {
-    const c = await queryFeature(
-      `/api/nri-counties/0/query`, `STCOFIPS='${countyFips}'`, false
-    );
+    const c = await queryFeature(NRI_COUNTIES, `STCOFIPS='${countyFips}'`, false);
     if (c) return { props: c.props, boundaryFeature: null, level: 'county' };
   }
   return null;
 }
 
 // Query an ArcGIS feature layer; tries GeoJSON, falls back to Esri JSON.
-async function queryFeature(endpoint, where, withGeometry) {
+// `endpoints` is an ordered list of equivalent URLs (proxy, then direct).
+async function queryFeature(endpoints, where, withGeometry) {
   const base = {
     where,
     outFields: '*',
@@ -659,34 +697,38 @@ async function queryFeature(endpoint, where, withGeometry) {
     outSR: '4326',
   };
 
-  // Attempt 1: GeoJSON
-  try {
-    const p = new URLSearchParams({ ...base, f: 'geojson' });
-    const res = await fetch(`${endpoint}?${p}`);
-    if (res.ok) {
-      const gj = await res.json();
-      const f = gj?.features?.[0];
-      if (f?.properties) return { props: f.properties, feature: withGeometry ? f : null };
-    }
-  } catch (e) { console.warn('[NRI] geojson query failed:', e.message); }
+  for (const format of ['geojson', 'json']) {
+    try {
+      const p = new URLSearchParams({ ...base, f: format });
+      const res = await fetchFirst(endpoints.map(e => `${e}?${p}`));
+      const data = await res.json();
 
-  // Attempt 2: Esri JSON
-  try {
-    const p = new URLSearchParams({ ...base, f: 'json' });
-    const res = await fetch(`${endpoint}?${p}`);
-    if (res.ok) {
-      const ej = await res.json();
-      const f = ej?.features?.[0];
-      if (f?.attributes) {
-        const geom = withGeometry ? esriPolygonToGeoJSON(f.geometry) : null;
+      // ArcGIS reports failures as HTTP 200 with an error object
+      if (data.error) {
+        lastNriError = `ArcGIS error ${data.error.code}: ${data.error.message}`;
+        console.warn('[query]', lastNriError, 'where:', where);
+        continue;
+      }
+
+      const feat = data?.features?.[0];
+      if (!feat) return null;  // valid response, no matching record
+
+      if (feat.properties) {   // GeoJSON shape
+        return { props: feat.properties, feature: withGeometry ? feat : null };
+      }
+      if (feat.attributes) {   // Esri JSON shape
+        const geom = withGeometry ? esriPolygonToGeoJSON(feat.geometry) : null;
         return {
-          props: f.attributes,
-          feature: geom ? { type: 'Feature', geometry: geom, properties: f.attributes } : null,
+          props: feat.attributes,
+          feature: geom ? { type: 'Feature', geometry: geom, properties: feat.attributes } : null,
         };
       }
+      return null;
+    } catch (e) {
+      lastNriError = e.message;
+      console.warn('[query]', format, 'attempt failed:', e.message);
     }
-  } catch (e) { console.warn('[NRI] esri-json query failed:', e.message); }
-
+  }
   return null;
 }
 
@@ -694,10 +736,7 @@ async function queryFeature(endpoint, where, withGeometry) {
 async function fetchTractBoundary(tractFips) {
   // Census Tracts live at layer 0 (current vintage) and layer 4 in Tracts_Blocks
   for (const layerId of [0, 4]) {
-    const r = await queryFeature(
-      `/api/tiger/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/${layerId}/query`,
-      `GEOID='${tractFips}'`, true
-    );
+    const r = await queryFeature(TIGER_TRACTS(layerId), `GEOID='${tractFips}'`, true);
     if (r?.feature) return r.feature;
   }
   return null;
@@ -707,12 +746,11 @@ async function fetchTractBoundary(tractFips) {
 async function fetchBuilding(lat, lng) {
   const q = `[out:json][timeout:15];(way["building"](around:60,${lat},${lng}););out geom;`;
   try {
-    const res = await fetch('/api/overpass/api/interpreter', {
+    const res = await fetchFirst(OVERPASS, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `data=${encodeURIComponent(q)}`,
     });
-    if (!res.ok) return null;
     const osm = await res.json();
     return osmBestBuilding(osm.elements || [], lat, lng);
   } catch { return null; }
@@ -798,6 +836,9 @@ function renderDashboard(geo, nri) {
   if (!nriProps || (score == null && !ratingStr)) {
     document.getElementById('score-card').classList.add('hidden');
     document.getElementById('score-unavail').classList.remove('hidden');
+    document.getElementById('nri-unavail-msg').textContent = lastNriError
+      ? `Could not reach the FEMA NRI service (${lastNriError}).`
+      : 'NRI data is not available for this location.';
   } else {
     document.getElementById('score-unavail').classList.add('hidden');
     document.getElementById('score-card').classList.remove('hidden');
@@ -909,6 +950,7 @@ async function search() {
   if (!address) return;
 
   const seq = ++searchSeq;
+  lastNriError = null;
   setSearching(true);
 
   try {
