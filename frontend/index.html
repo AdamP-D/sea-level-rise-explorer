@@ -360,7 +360,7 @@
       <p>Enter any US street address to view the FEMA National Risk Index assessment for that location.</p>
       <div class="pill-row">
         <span class="pill">Satellite imagery</span>
-        <span class="pill">Property outline</span>
+        <span class="pill">Parcel boundary</span>
         <span class="pill">18 hazard types</span>
         <span class="pill">Risk insights</span>
       </div>
@@ -443,6 +443,7 @@
         <div class="attrib">
           Risk scores: <a href="https://hazards.fema.gov/nri/" target="_blank" rel="noopener">FEMA National Risk Index</a><br>
           Geocoding &amp; boundaries: <a href="https://www.census.gov/" target="_blank" rel="noopener">US Census Bureau</a><br>
+          Parcel boundaries: state parcel GIS services (where available)<br>
           Building footprints: <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap contributors</a><br>
           Satellite imagery: <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri World Imagery</a>
         </div>
@@ -622,11 +623,11 @@ legend.onAdd = () => {
 };
 legend.addTo(map);
 
-let tractLayer = null, buildingLayer = null, markerLayer = null;
+let tractLayer = null, outlineLayer = null, markerLayer = null;
 
 function clearMapLayers() {
-  [tractLayer, buildingLayer, markerLayer].forEach(l => l && map.removeLayer(l));
-  tractLayer = buildingLayer = markerLayer = null;
+  [tractLayer, outlineLayer, markerLayer].forEach(l => l && map.removeLayer(l));
+  tractLayer = outlineLayer = markerLayer = null;
 }
 
 // ── API: Census Geocoder ──────────────────────────────────────────────────────
@@ -663,6 +664,7 @@ async function geocode(address) {
     matchedAddress: m.matchedAddress,
     tractFips: tract?.GEOID ?? null,                       // 11-digit
     countyFips: tract ? `${tract.STATE}${tract.COUNTY}` : null, // 5-digit
+    stateFips: tract?.STATE ?? null,                       // 2-digit
   };
 }
 
@@ -775,8 +777,79 @@ function osmBestBuilding(elements, lat, lng) {
   return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [best] }, properties: {} };
 }
 
+// ── API: Parcel boundaries (free statewide ArcGIS services) ──────────────────
+// There is no free national parcel API — parcel data is published per state
+// or county. Candidate query endpoints are tried in order; keyed by the
+// 2-digit state FIPS from the geocoder. States without an entry fall back
+// to the OSM building footprint.
+const PARCEL_SOURCES = {
+  '24': [ // Maryland — MD iMAP parcel boundaries
+    'https://geodata.md.gov/imap/rest/services/PlanningCadastre/MD_ParcelBoundaries/MapServer/0/query',
+    'https://mdgeodata.md.gov/imap/rest/services/PlanningCadastre/MD_ParcelBoundaries/MapServer/0/query',
+  ],
+  '30': [ // Montana — MSDI cadastral framework
+    'https://gisservicemt.gov/arcgis/rest/services/MSDI_Framework/Parcels/MapServer/0/query',
+  ],
+  '37': [ // North Carolina — NC OneMap statewide parcels
+    'https://services.nconemap.gov/secure/rest/services/NC1Map_Parcels/MapServer/1/query',
+  ],
+};
+
+// Point-in-polygon query: which parcel contains the geocoded point?
+async function fetchParcel(lat, lng, stateFips) {
+  const sources = PARCEL_SOURCES[stateFips];
+  if (!sources) return null;
+
+  const base = {
+    geometry: `${lng},${lat}`,
+    geometryType: 'esriGeometryPoint',
+    inSR: '4326',
+    spatialRel: 'esriSpatialRelIntersects',
+    outFields: '*',
+    returnGeometry: 'true',
+    outSR: '4326',
+  };
+
+  for (const src of sources) {
+    for (const format of ['geojson', 'json']) {
+      try {
+        const p = new URLSearchParams({ ...base, f: format });
+        const res = await fetch(`${src}?${p}`);
+        if (!res.ok) { console.warn('[parcel] HTTP', res.status, src); continue; }
+        const data = await res.json();
+        if (data.error) {
+          console.warn('[parcel] ArcGIS error', data.error.code, data.error.message, src);
+          continue;
+        }
+        const feat = data?.features?.[0];
+        if (!feat) return null;  // service reachable; no parcel at this point
+        if (feat.properties) return feat;
+        if (feat.attributes) {
+          const geom = esriPolygonToGeoJSON(feat.geometry);
+          if (geom) return { type: 'Feature', geometry: geom, properties: feat.attributes };
+        }
+      } catch (e) {
+        console.warn('[parcel]', format, 'attempt failed:', e.message, src);
+      }
+    }
+  }
+  return null;
+}
+
+// Property outline: parcel boundary preferred, OSM building footprint fallback.
+// Returns { feature, source: 'parcel' | 'building' } or null.
+async function fetchOutline(lat, lng, stateFips) {
+  try {
+    const parcel = await fetchParcel(lat, lng, stateFips);
+    if (parcel) return { feature: parcel, source: 'parcel' };
+  } catch (e) { console.warn('[parcel]', e.message); }
+  const building = await fetchBuilding(lat, lng);
+  if (building) return { feature: building, source: 'building' };
+  return null;
+}
+
 // ── Map rendering ─────────────────────────────────────────────────────────────
-function renderMap(lat, lng, tractFeature, buildingFeature, nriProps) {
+function renderMap(lat, lng, tractFeature, outline, nriProps) {
   clearMapLayers();
 
   const score = asNumber(nriProps?.RISK_SCORE);
@@ -792,10 +865,18 @@ function renderMap(lat, lng, tractFeature, buildingFeature, nriProps) {
     ).addTo(map);
   }
 
-  if (buildingFeature) {
-    buildingLayer = L.geoJSON(buildingFeature, {
-      style: { color: '#f97316', weight: 2.5, fillColor: '#f97316', fillOpacity: 0.35, opacity: 1 }
-    }).bindPopup('<strong>Property outline</strong><br>Source: OpenStreetMap').addTo(map);
+  if (outline?.feature) {
+    const isParcel = outline.source === 'parcel';
+    outlineLayer = L.geoJSON(outline.feature, {
+      // Parcels are lot lines: strong outline, light fill so imagery shows.
+      style: {
+        color: '#f97316', weight: isParcel ? 3 : 2.5,
+        fillColor: '#f97316', fillOpacity: isParcel ? 0.10 : 0.35, opacity: 1,
+      }
+    }).bindPopup(isParcel
+      ? '<strong>Parcel boundary</strong><br>Source: state parcel GIS'
+      : '<strong>Building footprint</strong><br>Source: OpenStreetMap'
+    ).addTo(map);
   }
 
   const icon = L.divIcon({
@@ -808,8 +889,8 @@ function renderMap(lat, lng, tractFeature, buildingFeature, nriProps) {
 
   // Prioritize seeing the property itself; the tract overlay colors the
   // surrounding area at any zoom.
-  if (buildingLayer) {
-    map.fitBounds(buildingLayer.getBounds(), { padding: [80, 80], maxZoom: 19 });
+  if (outlineLayer) {
+    map.fitBounds(outlineLayer.getBounds(), { padding: [80, 80], maxZoom: 19 });
   } else if (lat != null && lng != null) {
     map.flyTo([lat, lng], 17, { duration: 1.0 });
   } else if (tractLayer) {
@@ -818,13 +899,18 @@ function renderMap(lat, lng, tractFeature, buildingFeature, nriProps) {
 }
 
 // ── Dashboard rendering ───────────────────────────────────────────────────────
-function renderDashboard(geo, nri) {
+function renderDashboard(geo, nri, outline) {
   const nriProps = nri?.props ?? null;
 
   // Property section
   document.getElementById('r-addr').textContent = geo.matchedAddress || '';
+  const outlineNote =
+    outline?.source === 'parcel' ? 'Parcel boundary shown' :
+    outline?.source === 'building' ? 'Building footprint shown (no free parcel data for this state)' :
+    'No property outline available';
   document.getElementById('r-meta').textContent =
-    geo.tractFips ? `Census Tract ${geo.tractFips}` : '';
+    [geo.tractFips ? `Census Tract ${geo.tractFips}` : null, outlineNote]
+      .filter(Boolean).join(' · ');
 
   // Composite score
   const score = asNumber(nriProps?.RISK_SCORE);
@@ -968,15 +1054,16 @@ async function search() {
       return;
     }
 
-    // 2. Parallel: NRI scores (+tract geometry) and building footprint
-    const [nriRes, buildRes] = await Promise.allSettled([
+    // 2. Parallel: NRI scores (+tract geometry) and property outline
+    //    (parcel boundary preferred, OSM building footprint fallback)
+    const [nriRes, outlineRes] = await Promise.allSettled([
       fetchNRI(geo.tractFips, geo.countyFips),
-      fetchBuilding(geo.lat, geo.lng),
+      fetchOutline(geo.lat, geo.lng, geo.stateFips),
     ]);
     if (seq !== searchSeq) return;
 
     const nri = nriRes.status === 'fulfilled' ? nriRes.value : null;
-    const building = buildRes.status === 'fulfilled' ? buildRes.value : null;
+    const outline = outlineRes.status === 'fulfilled' ? outlineRes.value : null;
 
     // 3. Tract boundary: prefer geometry from the NRI query itself;
     //    fall back to TIGERweb if missing.
@@ -987,8 +1074,8 @@ async function search() {
     }
 
     // 4. Render
-    renderMap(geo.lat, geo.lng, tractFeature, building, nri?.props ?? null);
-    renderDashboard(geo, nri);
+    renderMap(geo.lat, geo.lng, tractFeature, outline, nri?.props ?? null);
+    renderDashboard(geo, nri, outline);
     showPanel('p-results');
 
   } catch (err) {
