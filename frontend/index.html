@@ -52,7 +52,33 @@
     }
     .brand-icon { font-size: 1.2rem; }
 
-    .search-wrap { flex: 1; max-width: 600px; display: flex; gap: 8px; }
+    .search-wrap { flex: 1; max-width: 600px; display: flex; gap: 8px; position: relative; }
+
+    /* Autocomplete dropdown */
+    #ac-list {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 92px;               /* leave room for the Search button */
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.55);
+      overflow: hidden;
+      z-index: 2000;
+    }
+    .ac-item {
+      padding: 9px 14px;
+      font-size: 0.83rem;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover, .ac-item.active { background: var(--bg-hover); }
+    .ac-item .ac-pin { opacity: 0.55; margin-right: 6px; }
 
     #addr-input {
       flex: 1;
@@ -111,6 +137,20 @@
       animation: spin 0.7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* SLR scenario slider (Leaflet control) */
+    .slr-control {
+      background: rgba(26, 35, 50, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      width: 168px;
+    }
+    .slr-control .slr-title { font-weight: 700; font-size: 0.72rem; margin-bottom: 6px; }
+    .slr-control input[type=range] { width: 100%; accent-color: #38bdf8; cursor: pointer; }
+    .slr-control .slr-value { font-size: 0.72rem; color: var(--muted); text-align: center; margin-top: 2px; }
+    .slr-control .slr-value b { color: #38bdf8; }
 
     /* NRI legend (Leaflet control) */
     .nri-legend {
@@ -335,6 +375,7 @@
            placeholder="Enter US property address (e.g., 1600 Pennsylvania Ave NW, Washington DC)"
            autocomplete="off">
     <button id="search-btn">Search</button>
+    <div id="ac-list" class="hidden"></div>
   </div>
 </header>
 
@@ -362,6 +403,7 @@
         <span class="pill">Satellite imagery</span>
         <span class="pill">Parcel boundary</span>
         <span class="pill">18 hazard types</span>
+        <span class="pill">Sea level rise</span>
         <span class="pill">Risk insights</span>
       </div>
     </div>
@@ -428,6 +470,12 @@
         <div class="hz-cards" id="r-top-cards"></div>
       </div>
 
+      <!-- NOAA sea level rise exposure -->
+      <div class="ds">
+        <div class="ds-label">Sea Level Rise Exposure (NOAA)</div>
+        <div id="slr-content" style="font-size:0.82rem;line-height:1.6;color:var(--muted)"></div>
+      </div>
+
       <!-- All 18 hazards (expandable) -->
       <div>
         <div id="all-toggle">
@@ -444,6 +492,8 @@
           Risk scores: <a href="https://hazards.fema.gov/nri/" target="_blank" rel="noopener">FEMA National Risk Index</a><br>
           Geocoding &amp; boundaries: <a href="https://www.census.gov/" target="_blank" rel="noopener">US Census Bureau</a><br>
           Parcel boundaries: state parcel GIS services (where available)<br>
+          Sea level rise: <a href="https://coast.noaa.gov/slr/" target="_blank" rel="noopener">NOAA Sea Level Rise Viewer</a><br>
+          Address suggestions: <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a> / OpenStreetMap<br>
           Building footprints: <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap contributors</a><br>
           Satellite imagery: <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri World Imagery</a>
         </div>
@@ -573,9 +623,23 @@ const GEOCODER = [
   '/api/census/geocoder/geographies/onelineaddress',
   'https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress',
 ];
+const GEOCODER_COORDS = [
+  '/api/census/geocoder/geographies/coordinates',
+  'https://geocoding.geo.census.gov/geocoder/geographies/coordinates',
+];
 const OVERPASS = [
   '/api/overpass/api/interpreter',
   'https://overpass-api.de/api/interpreter',
+];
+// Photon (komoot) — OSM-based geocoder designed for search-as-you-type
+const PHOTON = [
+  'https://photon.komoot.io/api',
+  '/api/photon/api',
+];
+// NOAA Sea Level Rise Viewer map services (dc_slr folder, slr_0ft..slr_10ft)
+const SLR_HOSTS = [
+  'https://www.coast.noaa.gov/arcgis/rest/services/dc_slr',
+  '/api/noaa-slr',
 ];
 
 let lastNriError = null;
@@ -665,6 +729,32 @@ async function geocode(address) {
     tractFips: tract?.GEOID ?? null,                       // 11-digit
     countyFips: tract ? `${tract.STATE}${tract.COUNTY}` : null, // 5-digit
     stateFips: tract?.STATE ?? null,                       // 2-digit
+  };
+}
+
+// Reverse: coordinates → census tract (used when a suggestion is picked,
+// since Photon already provides the point).
+async function geocodeFromPoint(lat, lng, label) {
+  const p = new URLSearchParams({
+    x: lng, y: lat,
+    benchmark: 'Public_AR_Current',
+    vintage: 'Current_Current',
+    format: 'json',
+  });
+  let tract = null;
+  try {
+    const res = await fetchFirst(GEOCODER_COORDS.map(e => `${e}?${p}`));
+    const data = await res.json();
+    tract = data?.result?.geographies?.['Census Tracts']?.[0] ?? null;
+  } catch (e) {
+    console.warn('[reverse-geocode]', e.message);
+  }
+  return {
+    lat, lng,
+    matchedAddress: label,
+    tractFips: tract?.GEOID ?? null,
+    countyFips: tract ? `${tract.STATE}${tract.COUNTY}` : null,
+    stateFips: tract?.STATE ?? null,
   };
 }
 
@@ -848,6 +938,94 @@ async function fetchOutline(lat, lng, stateFips) {
   return null;
 }
 
+// ── API: NOAA Sea Level Rise (dc_slr map services, 0–10 ft above MHHW) ───────
+// Locked once per session: which host/service-casing/layer answers queries.
+let slrService = null;  // { host, casing, layer }
+
+function slrQueryUrl(svc, ft) {
+  return `${svc.host}/${svc.casing}_${ft}ft/MapServer/${svc.layer}/query`;
+}
+
+// Is the point inside the ft-scenario inundation extent? true/false, or
+// null when the service cannot be reached.
+async function slrPointInundated(ft, lat, lng) {
+  const p = new URLSearchParams({
+    geometry: `${lng},${lat}`,
+    geometryType: 'esriGeometryPoint',
+    inSR: '4326',
+    spatialRel: 'esriSpatialRelIntersects',
+    returnCountOnly: 'true',
+    f: 'json',
+  });
+
+  const candidates = slrService
+    ? [slrService]
+    : SLR_HOSTS.flatMap(host => ['slr', 'SLR'].flatMap(casing =>
+        [0, 1].map(layer => ({ host, casing, layer }))));
+
+  for (const svc of candidates) {
+    try {
+      const res = await fetch(`${slrQueryUrl(svc, ft)}?${p}`);
+      if (!res.ok) { console.warn('[slr] HTTP', res.status, slrQueryUrl(svc, ft)); continue; }
+      const data = await res.json();
+      if (data.error) { console.warn('[slr] ArcGIS error', data.error.code, slrQueryUrl(svc, ft)); continue; }
+      if (typeof data.count === 'number') {
+        slrService = svc;
+        return data.count > 0;
+      }
+    } catch (e) { console.warn('[slr]', e.message); }
+  }
+  return null;
+}
+
+// Minimum SLR scenario (ft) that inundates the point.
+// The extents are nested, so if 10 ft is dry, everything below is too.
+// Returns { ok, minFt } — minFt null means dry through 10 ft.
+async function probeSlr(lat, lng) {
+  const atMax = await slrPointInundated(10, lat, lng);
+  if (atMax == null) return { ok: false, minFt: null };
+  if (!atMax) return { ok: true, minFt: null };
+
+  const results = await Promise.all(
+    [1,2,3,4,5,6,7,8,9].map(ft => slrPointInundated(ft, lat, lng).then(v => ({ ft, v })))
+  );
+  const hit = results.find(r => r.v === true);
+  return { ok: true, minFt: hit ? hit.ft : 10 };
+}
+
+// ── SLR map overlay (scenario slider control) ─────────────────────────────────
+let slrTileLayer = null;
+
+function setSlrScenario(ft) {
+  const label = document.getElementById('slr-value');
+  if (slrTileLayer) { map.removeLayer(slrTileLayer); slrTileLayer = null; }
+  if (ft <= 0) {
+    if (label) label.textContent = 'Off';
+    return;
+  }
+  const svc = slrService || { host: SLR_HOSTS[0], casing: 'slr', layer: 0 };
+  slrTileLayer = L.tileLayer(
+    `${svc.host}/${svc.casing}_${ft}ft/MapServer/tile/{z}/{y}/{x}`,
+    { opacity: 0.55, maxNativeZoom: 16, maxZoom: 19,
+      attribution: '<a href="https://coast.noaa.gov/slr/">NOAA SLR</a>' }
+  ).addTo(map);
+  if (label) label.innerHTML = `<b>${ft} ft</b> above current high tide`;
+}
+
+const slrControl = L.control({ position: 'topright' });
+slrControl.onAdd = () => {
+  const div = L.DomUtil.create('div', 'slr-control');
+  div.innerHTML =
+    '<div class="slr-title">🌊 Sea Level Rise Overlay</div>' +
+    '<input type="range" id="slr-slider" min="0" max="10" value="0" step="1">' +
+    '<div class="slr-value" id="slr-value">Off</div>';
+  if (L.DomEvent?.disableClickPropagation) L.DomEvent.disableClickPropagation(div);
+  div.querySelector?.('#slr-slider')?.addEventListener('input',
+    e => setSlrScenario(parseInt(e.target.value, 10)));
+  return div;
+};
+slrControl.addTo(map);
+
 // ── Map rendering ─────────────────────────────────────────────────────────────
 function renderMap(lat, lng, tractFeature, outline, nriProps) {
   clearMapLayers();
@@ -1009,6 +1187,42 @@ function renderDashboard(geo, nri, outline) {
   }).join('');
 }
 
+// ── SLR dashboard section ─────────────────────────────────────────────────────
+function slrSeverity(minFt) {
+  if (minFt == null) return { label: 'Minimal', color: COLOR.vlow, bg: 'bg-vlow' };
+  if (minFt <= 2)    return { label: 'Very High', color: COLOR.vhigh, bg: 'bg-vhigh' };
+  if (minFt <= 4)    return { label: 'High', color: COLOR.high, bg: 'bg-high' };
+  if (minFt <= 6)    return { label: 'Moderate', color: COLOR.mod, bg: 'bg-mod' };
+  return { label: 'Low', color: COLOR.low, bg: 'bg-low' };
+}
+
+function renderSlr(slr) {
+  const el = document.getElementById('slr-content');
+  if (!slr?.ok) {
+    el.innerHTML = 'NOAA sea level rise data could not be reached for this search. ' +
+      'Use the map’s Sea Level Rise slider to explore scenarios visually.';
+    return;
+  }
+  const sev = slrSeverity(slr.minFt);
+  if (slr.minFt == null) {
+    el.innerHTML =
+      `<span class="rating-badge ${sev.bg}" style="margin-bottom:6px">${sev.label} exposure</span><br>` +
+      'No inundation projected at up to <strong>10 ft</strong> of sea level rise ' +
+      '(or the property is outside NOAA’s coastal coverage area).';
+  } else {
+    el.innerHTML =
+      `<span class="rating-badge ${sev.bg}" style="margin-bottom:6px">${sev.label} exposure</span><br>` +
+      `This property is projected to be inundated at ` +
+      `<strong style="color:${sev.color}">${slr.minFt} ft</strong> of sea level rise ` +
+      'above current high tide (MHHW). The map overlay shows this scenario — ' +
+      'drag the Sea Level Rise slider to explore others.';
+    // Show the first-inundation scenario on the map automatically
+    const slider = document.getElementById('slr-slider');
+    if (slider) slider.value = String(slr.minFt);
+    setSlrScenario(slr.minFt);
+  }
+}
+
 // ── UI state helpers ──────────────────────────────────────────────────────────
 function showPanel(id) {
   for (const pid of ['p-empty', 'p-error', 'p-results']) {
@@ -1036,14 +1250,21 @@ let searchSeq = 0;
 async function search() {
   const address = document.getElementById('addr-input').value.trim();
   if (!address) return;
+  await runSearch(() => geocode(address));
+}
 
+async function searchFromSuggestion(item) {
+  await runSearch(() => geocodeFromPoint(item.lat, item.lng, item.label));
+}
+
+async function runSearch(getGeo) {
   const seq = ++searchSeq;
   lastNriError = null;
   setSearching(true);
 
   try {
-    // 1. Geocode
-    const geo = await geocode(address);
+    // 1. Geocode (forward from text, or reverse from a picked suggestion)
+    const geo = await getGeo();
     if (seq !== searchSeq) return;  // superseded by a newer search
     if (!geo || geo.lat == null || geo.lng == null) {
       showError(
@@ -1054,16 +1275,18 @@ async function search() {
       return;
     }
 
-    // 2. Parallel: NRI scores (+tract geometry) and property outline
-    //    (parcel boundary preferred, OSM building footprint fallback)
-    const [nriRes, outlineRes] = await Promise.allSettled([
+    // 2. Parallel: NRI scores (+tract geometry), property outline
+    //    (parcel preferred, building fallback), and NOAA SLR probe
+    const [nriRes, outlineRes, slrRes] = await Promise.allSettled([
       fetchNRI(geo.tractFips, geo.countyFips),
       fetchOutline(geo.lat, geo.lng, geo.stateFips),
+      probeSlr(geo.lat, geo.lng),
     ]);
     if (seq !== searchSeq) return;
 
     const nri = nriRes.status === 'fulfilled' ? nriRes.value : null;
     const outline = outlineRes.status === 'fulfilled' ? outlineRes.value : null;
+    const slr = slrRes.status === 'fulfilled' ? slrRes.value : { ok: false, minFt: null };
 
     // 3. Tract boundary: prefer geometry from the NRI query itself;
     //    fall back to TIGERweb if missing.
@@ -1076,6 +1299,7 @@ async function search() {
     // 4. Render
     renderMap(geo.lat, geo.lng, tractFeature, outline, nri?.props ?? null);
     renderDashboard(geo, nri, outline);
+    renderSlr(slr);
     showPanel('p-results');
 
   } catch (err) {
@@ -1096,10 +1320,110 @@ document.getElementById('all-toggle').addEventListener('click', () => {
   document.getElementById('chevron').classList.toggle('open', !open);
 });
 
-document.getElementById('search-btn').addEventListener('click', search);
-document.getElementById('addr-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') search();
+document.getElementById('search-btn').addEventListener('click', () => { closeAc(); search(); });
+
+// ── Address autocomplete (Photon / OSM) ───────────────────────────────────────
+const acInput = document.getElementById('addr-input');
+const acList = document.getElementById('ac-list');
+let acTimer = null, acItems = [], acActive = -1, acSeq = 0;
+
+function closeAc() {
+  acList.classList.add('hidden');
+  acList.innerHTML = '';
+  acItems = [];
+  acActive = -1;
+}
+
+function photonLabel(pr) {
+  const line1 = pr.name || [pr.housenumber, pr.street].filter(Boolean).join(' ');
+  return [line1, pr.city || pr.county, pr.state, pr.postcode]
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .join(', ');
+}
+
+async function loadSuggestions(q) {
+  const seq = ++acSeq;
+  try {
+    const p = new URLSearchParams({ q, limit: '10', lang: 'en' });
+    // Bias results toward the current map view once the user has zoomed in
+    if (map.getZoom && map.getZoom() > 6 && map.getCenter) {
+      const c = map.getCenter();
+      p.set('lat', c.lat.toFixed(4));
+      p.set('lon', c.lng.toFixed(4));
+    }
+    const res = await fetchFirst(PHOTON.map(e => `${e}/?${p}`));
+    const gj = await res.json();
+    if (seq !== acSeq) return;  // stale response
+
+    const seen = new Set();
+    acItems = (gj.features || [])
+      .filter(f => f.properties?.countrycode === 'US' && f.geometry?.coordinates)
+      .map(f => ({
+        label: photonLabel(f.properties),
+        lat: f.geometry.coordinates[1],
+        lng: f.geometry.coordinates[0],
+      }))
+      .filter(it => it.label && !seen.has(it.label) && seen.add(it.label))
+      .slice(0, 6);
+
+    if (!acItems.length) return closeAc();
+    acActive = -1;
+    acList.innerHTML = acItems.map((it, i) =>
+      `<div class="ac-item" data-i="${i}"><span class="ac-pin">📍</span>${esc(it.label)}</div>`
+    ).join('');
+    acList.classList.remove('hidden');
+  } catch (e) {
+    if (seq === acSeq) closeAc();
+    console.warn('[autocomplete]', e.message);
+  }
+}
+
+function selectSuggestion(i) {
+  const item = acItems[i];
+  if (!item) return;
+  acInput.value = item.label;
+  closeAc();
+  searchFromSuggestion(item);
+}
+
+function setActive(i) {
+  acActive = i;
+  [...acList.children].forEach((el, j) => el.classList.toggle('active', j === i));
+}
+
+acInput.addEventListener('input', () => {
+  clearTimeout(acTimer);
+  const q = acInput.value.trim();
+  if (q.length < 3) return closeAc();
+  acTimer = setTimeout(() => loadSuggestions(q), 280);
 });
+
+acInput.addEventListener('keydown', e => {
+  const open = !acList.classList.contains('hidden') && acItems.length > 0;
+  if (e.key === 'ArrowDown' && open) {
+    e.preventDefault();
+    setActive((acActive + 1) % acItems.length);
+  } else if (e.key === 'ArrowUp' && open) {
+    e.preventDefault();
+    setActive((acActive - 1 + acItems.length) % acItems.length);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    clearTimeout(acTimer);
+    if (open && acActive >= 0) selectSuggestion(acActive);
+    else { closeAc(); search(); }
+  } else if (e.key === 'Escape') {
+    closeAc();
+  }
+});
+
+// mousedown (not click) so selection wins over the input's blur
+acList.addEventListener('mousedown', e => {
+  const item = e.target.closest('.ac-item');
+  if (item) { e.preventDefault(); selectSuggestion(parseInt(item.dataset.i, 10)); }
+});
+
+acInput.addEventListener('blur', () => setTimeout(closeAc, 150));
 </script>
 </body>
 </html>
